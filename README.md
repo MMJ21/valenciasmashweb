@@ -1,6 +1,8 @@
 # ValenciaSmash
 
-Esqueleto de la plataforma comunitaria ValenciaSmash. La arquitectura sigue el enfoque modular descrito en `docs/spec.md`.
+Aplicación de la comunidad ValenciaSmash. La arquitectura y los requisitos están descritos en `docs/spec.md`.
+
+Las decisiones y alternativas arquitectónicas se documentan en el [índice de ADR](docs/adr/README.md).
 
 ## Requisitos
 
@@ -10,13 +12,24 @@ Esqueleto de la plataforma comunitaria ValenciaSmash. La arquitectura sigue el e
 
 ## Desarrollo local
 
-1. Instala dependencias: `pnpm install`.
+1. Instala dependencias: `corepack pnpm install`.
 2. Copia `.env.example` a `.env.local`. No necesitas `DATABASE_URL` para usar la base local.
-3. Inicializa y siembra la base local: `pnpm db:local`.
-4. Arranca Next.js: `pnpm dev`.
+3. Inicializa y siembra la base local: `corepack pnpm db:local`.
+4. Arranca Next.js: `corepack pnpm dev`.
 
-La landing está en `http://localhost:3000` y la comprobación de salud en `/api/health`.
+La web está en `http://localhost:3000`; la comprobación de salud, en `/api/health`; el registro, en `/auth/sign-up`; y el inicio de sesión, en `/auth/sign-in`.
 En desarrollo, `/api/dev/players` devuelve las fichas de prueba; esta ruta responde 404 en producción.
+
+La base incluye estas cuentas de prueba verificadas:
+
+| Usuario         | Rol        |
+| --------------- | ---------- |
+| `localadmin`    | `admin`    |
+| `localimporter` | `importer` |
+| `localplayer`   | `user`     |
+
+Contraseña local de las tres: `SmashVLC-2026!`. No reutilices estas credenciales en producción.
+Al registrarte en local, el enlace de verificación se imprime en la consola de `pnpm dev`.
 
 ## Base de datos local
 
@@ -24,6 +37,9 @@ En desarrollo, `/api/dev/players` devuelve las fichas de prueba; esta ruta respo
 - `pnpm db:local` aplica las migraciones Drizzle pendientes y agrega datos de ejemplo (admin, importer, usuario normal y jugador fantasma). Se puede repetir sin duplicar registros.
 - `pnpm db:reset` elimina **solo** `.data/pglite/` y la vuelve a crear con la migración y las semillas.
 - Para usar Neon en desarrollo, define `DATABASE_URL` en `.env.local`; esa URL tiene prioridad sobre PGlite.
+- Las nuevas cuentas reciben rol `admin` si su correo aparece en `ADMIN_EMAILS` (separados por comas); las demás empiezan como `user`.
+- Sin `RESEND_API_KEY` y `EMAIL_FROM`, los correos de verificación y recuperación se muestran en la consola local. En producción ambos secretos son obligatorios.
+- Para producción configura `BETTER_AUTH_SECRET` (32+ caracteres aleatorios), `BETTER_AUTH_URL`, `RESEND_API_KEY`, `EMAIL_FROM` y opcionalmente `ADMIN_EMAILS` en los secretos del entorno; no los incluyas en Git.
 - La ruta de jugadores de depuración no implementa autenticación porque solo está habilitada en `NODE_ENV=development`; no debe usarse para servir datos de una cuenta real.
 
 PGlite comparte el dialecto PostgreSQL y el historial de migraciones, pero no sustituye una prueba de concurrencia real en Neon: el matchmaking y los bloqueos se validarán contra PostgreSQL cuando se implemente esa funcionalidad.
@@ -42,13 +58,20 @@ El proyecto configura pnpm con `node-linker=hoisted` para que el trazado standal
 | `pnpm preview`     | Compilar y previsualizar en Workers |
 | `pnpm deploy`      | Compilar y desplegar en Cloudflare  |
 
-## Estado de fundaciones
+## Auth y perfiles
 
-- Better Auth está decidido, pero deliberadamente no se instala ni se crean sus tablas en la migración inicial (opción A). Se incorporará con T-1.1.
-- Las tablas base `users`, `players`, `player_characters` y `startgg_links` son el primer esquema de dominio. Durante T-1.1 se debe integrar la identidad de Better Auth y ajustar esta migración antes de usarla en producción.
+- Better Auth usa username, correo y contraseña con verificación obligatoria. Los identificadores son UUID y `user` es la única tabla de usuarios.
+- El perfil se edita en `/account` con Nick, nombre y apellidos, Twitter, Twitch, biografía y desplegables de personaje principal/secundario; se consulta en `/players/<username>`.
+- Los 86 iconos usados por la app están en `public/characters/`. El archivo completo de variantes `public/Stock Icons/` se ignora en Git y se conserva solo localmente. Para regenerar los iconos con `pnpm assets:characters`, descarga la carpeta de origen y colócala localmente en esa ruta.
+- La subida de fotos a R2 aún no está conectada; `wrangler.jsonc` declara el bucket `valenciasmash`, que tendrás que crear para despliegues.
 - No se guardan secretos en el repositorio. Usa secretos de Cloudflare para despliegues.
-- `wrangler.jsonc` declara el bucket R2 `valenciasmash`; créalo en la cuenta Cloudflare antes de desplegar.
 - La compatibilidad real de OpenNext con Workers y los límites del nivel gratuito se validan en el primer despliegue.
+
+## Assets y derechos de terceros
+
+Los iconos de personajes proceden de una colección compartida por `u/Max_Hamm` en [Reddit](https://www.reddit.com/r/smashbros/comments/1g8u7ug/i_made_200x200_pixel_versions_of_every_stock_icon/) y [Google Drive](https://drive.google.com/drive/folders/1Gj5_5OEBy7fyroFoIP08IXTwu_ovthiG). El autor comentó en Reddit que se podían usar libremente y sin crédito, pero no hay una licencia formal en la carpeta. Su permiso no cubre los derechos de Nintendo sobre personajes y arte originales; el uso de los iconos mantiene ese riesgo y no se presenta como autorización legal.
+
+ValenciaSmash es un proyecto comunitario independiente, no afiliado, patrocinado ni respaldado por Nintendo. Para solicitar la retirada o sustitución de un asset, [abre una incidencia en el repositorio](https://github.com/MMJ21/valenciasmashweb/issues/new?title=Solicitud%20de%20retirada%20de%20asset). El razonamiento y las alternativas están documentados en [ADR-0011](docs/adr/0011-iconos-de-personajes-de-terceros.md).
 
 ## Estructura
 

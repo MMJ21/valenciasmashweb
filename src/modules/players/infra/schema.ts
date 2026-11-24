@@ -8,25 +8,20 @@ import {
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
-
-export const users = pgTable("users", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  discordId: varchar("discord_id", { length: 32 }).unique(),
-  email: text("email"),
-  role: varchar("role", { length: 16 }).notNull().default("user"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  deletedAt: timestamp("deleted_at", { withTimezone: true }),
-});
+import { user } from "../../../lib/db/auth-schema";
 
 export const players = pgTable("players", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: uuid("user_id")
     .unique()
-    .references(() => users.id),
+    .references(() => user.id, { onDelete: "set null" }),
   startggPlayerId: varchar("startgg_player_id", { length: 64 }).unique(),
   startggSlug: text("startgg_slug"),
   gamertag: text("gamertag"),
-  displayName: text("display_name"),
+  firstName: varchar("first_name", { length: 80 }),
+  lastName: varchar("last_name", { length: 80 }),
+  twitter: varchar("twitter", { length: 64 }),
+  twitch: varchar("twitch", { length: 64 }),
   avatarUrl: text("avatar_url"),
   bio: varchar("bio", { length: 500 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -38,7 +33,7 @@ export const startggLinks = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     userId: uuid("user_id")
       .notNull()
-      .references(() => users.id),
+      .references(() => user.id, { onDelete: "cascade" }),
     startggUserId: varchar("startgg_user_id", { length: 64 }).notNull(),
     status: varchar("status", { length: 16 }).notNull(),
     verifiedVia: varchar("verified_via", { length: 16 }),

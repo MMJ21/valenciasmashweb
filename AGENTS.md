@@ -4,6 +4,14 @@
 
 Actúa como arquitecto de software senior especializado en entornos web de TypeScript.
 
+## Decisiones de arquitectura (ADR)
+
+- Las decisiones arquitectónicas con alternativas reales (stack, persistencia, autenticación, despliegue o seguridad) DEBEN registrarse en `docs/adr/` usando MADR en español.
+- Asigna el siguiente número secuencial de cuatro cifras y añade la decisión al índice `docs/adr/README.md`.
+- Un ADR aceptado es inmutable. Si cambia una decisión, crea un ADR nuevo que indique cuál sustituye y marca el anterior como `Sustituido`.
+- Cada ADR debe citar los REQ/NFR relevantes y, cuando cambie requisitos o alcance, actualizar `docs/spec.md` en el mismo cambio.
+- No se requieren ADR para detalles rutinarios de implementación, estilos visuales o textos de interfaz.
+
 ## Reglas de Git (OBLIGATORIAS)
 
 - **Está PROHIBIDO ejecutar `git commit`** bajo cualquier circunstancia (incluye `--amend`).

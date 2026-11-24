@@ -5,8 +5,29 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1795175814539,
-      "tag": "0000_mature_cerebro",
+      "when": 1795508378808,
+      "tag": "0000_dear_mesmero",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1795508665552,
+      "tag": "0001_flawless_power_pack",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1795512165213,
+      "tag": "0002_ordinary_master_chief",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1795512843919,
+      "tag": "0003_dusty_impossible_man",
       "breakpoints": true
     }
   ]

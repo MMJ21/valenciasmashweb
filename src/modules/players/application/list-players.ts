@@ -4,7 +4,8 @@ import { players } from "../infra/schema";
 export interface DevelopmentPlayer {
   readonly id: string;
   readonly gamertag: string | null;
-  readonly displayName: string | null;
+  readonly firstName: string | null;
+  readonly lastName: string | null;
   readonly startggPlayerId: string | null;
 }
 
@@ -14,7 +15,8 @@ export async function listPlayersForDevelopment(): Promise<DevelopmentPlayer[]> 
     .select({
       id: players.id,
       gamertag: players.gamertag,
-      displayName: players.displayName,
+      firstName: players.firstName,
+      lastName: players.lastName,
       startggPlayerId: players.startggPlayerId,
     })
     .from(players);

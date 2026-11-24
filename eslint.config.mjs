@@ -21,6 +21,7 @@ const config = [
         },
         { type: "module-infra", pattern: "src/modules/*/infra/**", capture: ["module"] },
         { type: "module-public", pattern: "src/modules/*/index.ts", capture: ["module"] },
+        { type: "module-public", pattern: "src/modules/*/public/**", capture: ["module"] },
       ],
     },
     rules: {

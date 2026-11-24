@@ -43,6 +43,9 @@ yarn-error.log*
 # local database
 .data/
 
+# Original third-party stock icon archive; normalized app icons remain tracked in public/characters/
+/public/Stock Icons/
+
 # caches
 .cache
 .eslintcache
