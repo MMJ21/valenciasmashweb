@@ -15,15 +15,24 @@ export function DeleteAccountForm(): React.JSX.Element {
 
     setIsSubmitting(true);
     const formData = new FormData(event.currentTarget);
-    const result = await authClient.deleteUser({
-      password: String(formData.get("password") ?? ""),
-    });
-    setIsSubmitting(false);
-    if (result.error !== null) {
-      setMessage(result.error.message ?? "No se pudo eliminar la cuenta.");
-      return;
+    try {
+      const result = await authClient.deleteUser({
+        password: String(formData.get("password") ?? ""),
+      });
+      if (result.error !== null) {
+        setMessage(
+          result.error.message ?? "No se pudo eliminar la cuenta. Puedes volver a intentarlo.",
+        );
+        return;
+      }
+      window.location.assign("/");
+    } catch {
+      setMessage(
+        "No se pudo conectar con el servidor. Tu cuenta sigue activa; puedes volver a intentarlo.",
+      );
+    } finally {
+      setIsSubmitting(false);
     }
-    window.location.assign("/");
   }
 
   return (

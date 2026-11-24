@@ -1,9 +1,11 @@
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { AppError } from "@/lib/errors";
 import * as authSchema from "@/lib/db/auth-schema";
 import type { PlayerProfileInput } from "../domain/profile-input";
 import { createPlayersDatabase } from "../infra/database";
 import * as schema from "../infra/schema";
+
+type PlayerDatabase = Awaited<ReturnType<typeof createPlayersDatabase>>;
 
 export interface PlayerProfileCharacter {
   readonly id: string;
@@ -23,8 +25,15 @@ export interface PlayerProfile {
   readonly characters: readonly PlayerProfileCharacter[];
 }
 
-async function loadProfile(userId: string): Promise<PlayerProfile | null> {
-  const database = await createPlayersDatabase();
+async function ensurePlayerExists(database: PlayerDatabase, userId: string): Promise<void> {
+  // The Better Auth post-create hook can fail after the account is committed; repair on next use.
+  await database.insert(schema.players).values({ userId }).onConflictDoNothing();
+}
+
+async function loadProfile(
+  database: PlayerDatabase,
+  userId: string,
+): Promise<PlayerProfile | null> {
   const [record] = await database
     .select({
       userId: authSchema.user.id,
@@ -67,7 +76,9 @@ async function loadProfile(userId: string): Promise<PlayerProfile | null> {
 }
 
 export async function getOwnPlayerProfile(userId: string): Promise<PlayerProfile | null> {
-  return loadProfile(userId);
+  const database = await createPlayersDatabase();
+  await ensurePlayerExists(database, userId);
+  return loadProfile(database, userId);
 }
 
 export async function getPublicPlayerProfile(username: string): Promise<PlayerProfile | null> {
@@ -77,7 +88,7 @@ export async function getPublicPlayerProfile(username: string): Promise<PlayerPr
     .from(authSchema.user)
     .where(eq(authSchema.user.username, username))
     .limit(1);
-  return record === undefined ? null : loadProfile(record.userId);
+  return record === undefined ? null : loadProfile(database, record.userId);
 }
 
 export interface UpdatePlayerProfileInput extends PlayerProfileInput {
@@ -86,6 +97,7 @@ export interface UpdatePlayerProfileInput extends PlayerProfileInput {
 
 export async function updatePlayerProfile(input: UpdatePlayerProfileInput): Promise<void> {
   const database = await createPlayersDatabase();
+  await ensurePlayerExists(database, input.userId);
   const [player] = await database
     .select({ id: schema.players.id })
     .from(schema.players)
@@ -96,18 +108,61 @@ export async function updatePlayerProfile(input: UpdatePlayerProfileInput): Prom
     throw new AppError("No se encontró la ficha asociada a esta cuenta.", "NOT_FOUND");
   }
 
+  const profileChanges = {
+    gamertag: input.gamertag,
+    firstName: input.firstName,
+    lastName: input.lastName,
+    twitter: input.twitter.length === 0 ? null : input.twitter.replace(/^@/, ""),
+    twitch: input.twitch.length === 0 ? null : input.twitch.replace(/^@/, ""),
+    bio: input.bio,
+  };
+  const playerOwnership = and(
+    eq(schema.players.id, player.id),
+    eq(schema.players.userId, input.userId),
+  );
+  const deleteCharacters = database
+    .delete(schema.playerCharacters)
+    .where(eq(schema.playerCharacters.playerId, player.id));
+
+  if ("batch" in database) {
+    const updatePlayer = database.update(schema.players).set(profileChanges).where(playerOwnership);
+    const assertOwnership = database.execute(sql`
+      SELECT 1 / COUNT(*)
+      FROM ${schema.players}
+      WHERE ${schema.players.id} = ${player.id}
+        AND ${schema.players.userId} = ${input.userId}
+    `);
+
+    // Neon HTTP batches run transactionally; the guard aborts before character writes on a race.
+    if (input.characters.length === 0) {
+      await database.batch([updatePlayer, assertOwnership, deleteCharacters]);
+      return;
+    }
+
+    await database.batch([
+      updatePlayer,
+      assertOwnership,
+      deleteCharacters,
+      database.insert(schema.playerCharacters).values(
+        input.characters.map((character) => ({
+          playerId: player.id,
+          characterId: character.id,
+          isMain: character.isMain,
+        })),
+      ),
+    ]);
+    return;
+  }
+
   await database.transaction(async (transaction) => {
-    await transaction
+    const updatedPlayers = await transaction
       .update(schema.players)
-      .set({
-        gamertag: input.gamertag,
-        firstName: input.firstName,
-        lastName: input.lastName,
-        twitter: input.twitter.length === 0 ? null : input.twitter.replace(/^@/, ""),
-        twitch: input.twitch.length === 0 ? null : input.twitch.replace(/^@/, ""),
-        bio: input.bio,
-      })
-      .where(eq(schema.players.id, player.id));
+      .set(profileChanges)
+      .where(playerOwnership)
+      .returning({ id: schema.players.id });
+    if (updatedPlayers.length === 0) {
+      throw new AppError("La ficha ya no pertenece a esta cuenta.", "NOT_FOUND");
+    }
     await transaction
       .delete(schema.playerCharacters)
       .where(eq(schema.playerCharacters.playerId, player.id));

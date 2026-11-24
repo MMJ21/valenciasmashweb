@@ -1,9 +1,11 @@
 # ADR-0009: Hash de contraseñas con PBKDF2 mediante Web Crypto
 
-- **Estado:** Aceptado con reserva
+- **Estado:** Sustituido por [ADR-0012](0012-pbkdf2-compatible-workers.md)
 - **Fecha:** 2026-11-24 (documentado)
 - **Requisitos relacionados:** NFR-002, NFR-004, SEC-002
 - **Sustituye a:** hash por defecto de Better Auth (scrypt)
+
+> Este ADR conserva el razonamiento original. La decisión vigente es ADR-0012, que reduce el límite de PBKDF2 para ser compatible con el runtime de Workers.
 
 ## Contexto
 

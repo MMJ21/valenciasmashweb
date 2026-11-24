@@ -1,5 +1,5 @@
 {
-  "id": "454cad7d-288a-41a6-ab1f-07b5439bdb63",
+  "id": "4f26a4ca-b3a5-48e5-89b3-99a0f347a7df",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -329,6 +329,20 @@
           "primaryKey": false,
           "notNull": false
         },
+        "adult_confirmed": {
+          "name": "adult_confirmed",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "terms_accepted": {
+          "name": "terms_accepted",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -540,9 +554,27 @@
           "primaryKey": false,
           "notNull": false
         },
-        "display_name": {
-          "name": "display_name",
-          "type": "text",
+        "first_name": {
+          "name": "first_name",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_name": {
+          "name": "last_name",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "twitter": {
+          "name": "twitter",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "twitch": {
+          "name": "twitch",
+          "type": "varchar(64)",
           "primaryKey": false,
           "notNull": false
         },

@@ -58,6 +58,7 @@ const config = [
     ignores: [
       ".next/**",
       ".open-next/**",
+      ".wrangler/**",
       "drizzle/**",
       "playwright-report/**",
       "test-results/**",

@@ -1,10 +1,30 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
 
 export function AuthActions(): React.JSX.Element {
   const { data: session, isPending } = authClient.useSession();
+  const [signOutError, setSignOutError] = useState<string>();
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
+  async function handleSignOut(): Promise<void> {
+    setSignOutError(undefined);
+    setIsSigningOut(true);
+    try {
+      const result = await authClient.signOut();
+      if (result.error !== null) {
+        setSignOutError(result.error.message ?? "No se pudo cerrar la sesión. Inténtalo de nuevo.");
+        return;
+      }
+      window.location.assign("/");
+    } catch {
+      setSignOutError("No se pudo conectar con el servidor. Inténtalo de nuevo.");
+    } finally {
+      setIsSigningOut(false);
+    }
+  }
 
   if (isPending) {
     return (
@@ -22,14 +42,17 @@ export function AuthActions(): React.JSX.Element {
         </Link>
         <button
           className="button button-primary"
-          onClick={async () => {
-            await authClient.signOut();
-            window.location.assign("/");
-          }}
+          disabled={isSigningOut}
+          onClick={handleSignOut}
           type="button"
         >
-          Salir
+          {isSigningOut ? "Cerrando…" : "Salir"}
         </button>
+        {signOutError === undefined ? null : (
+          <p className="header-auth-error" role="alert">
+            {signOutError}
+          </p>
+        )}
       </div>
     );
   }

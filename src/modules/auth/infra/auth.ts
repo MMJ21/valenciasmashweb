@@ -88,7 +88,8 @@ function createAuth() {
             await database
               .update(playerSchema.players)
               .set({
-                userId: null,
+                startggPlayerId: null,
+                startggSlug: null,
                 gamertag: null,
                 firstName: null,
                 lastName: null,
@@ -97,6 +98,7 @@ function createAuth() {
                 avatarUrl: null,
                 bio: null,
               })
+              // Keep the relationship until the user DELETE succeeds; the FK detaches it atomically.
               .where(eq(playerSchema.players.userId, deletedUser.id));
           },
         },

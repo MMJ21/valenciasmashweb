@@ -1,4 +1,6 @@
-const ITERATIONS = 600_000;
+const ITERATIONS = 100_000;
+const WORKER_MAX_ITERATIONS = 100_000;
+const LEGACY_LOCAL_MAX_ITERATIONS = 600_000;
 const KEY_LENGTH_BITS = 256;
 const SALT_LENGTH_BYTES = 16;
 const PREFIX = "pbkdf2-sha256";
@@ -56,12 +58,14 @@ export async function verifyPasswordHash(input: {
 }): Promise<boolean> {
   const [prefix, iterationsText, saltText, expectedText, ...extra] = input.hash.split("$");
   const iterations = Number(iterationsText);
+  const maxIterations =
+    process.env.NODE_ENV === "development" ? LEGACY_LOCAL_MAX_ITERATIONS : WORKER_MAX_ITERATIONS;
   if (
     prefix !== PREFIX ||
     extra.length > 0 ||
     !Number.isSafeInteger(iterations) ||
     iterations < 100_000 ||
-    iterations > 1_000_000 ||
+    iterations > maxIterations ||
     saltText === undefined ||
     expectedText === undefined
   ) {

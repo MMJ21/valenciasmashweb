@@ -22,9 +22,10 @@ Este directorio registra las decisiones de arquitectura de ValenciaSmash mediant
 | [0006](0006-importacion-manual-torneos.md)       | Importación manual de torneos                                 | Aceptado             |
 | [0007](0007-semestre-derivado-de-fecha.md)       | Semestre derivado de la fecha local                           | Aceptado             |
 | [0008](0008-catalogo-estatico-personajes.md)     | Catálogo estático de 86 selecciones                           | Aceptado             |
-| [0009](0009-hash-pbkdf2-webcrypto.md)            | PBKDF2 mediante Web Crypto                                    | Aceptado con reserva |
+| [0009](0009-hash-pbkdf2-webcrypto.md)            | PBKDF2 mediante Web Crypto (decisión sustituida)              | Sustituido           |
 | [0010](0010-pwa-en-lugar-de-app-nativa.md)       | PWA antes que una app nativa                                  | Aceptado             |
 | [0011](0011-iconos-de-personajes-de-terceros.md) | Uso de iconos de personajes aportados por la comunidad        | Aceptado con reserva |
+| [0012](0012-pbkdf2-compatible-workers.md)        | Límite PBKDF2 conservador para Workers                        | Aceptado con reserva |
 
 ## Plantilla
 

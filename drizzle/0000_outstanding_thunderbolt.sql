@@ -41,6 +41,8 @@ CREATE TABLE "user" (
 	"display_username" varchar(32),
 	"role" varchar(16) DEFAULT 'user' NOT NULL,
 	"deleted_at" timestamp with time zone,
+	"adult_confirmed" boolean DEFAULT false NOT NULL,
+	"terms_accepted" boolean DEFAULT false NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -67,7 +69,10 @@ CREATE TABLE "players" (
 	"startgg_player_id" varchar(64),
 	"startgg_slug" text,
 	"gamertag" text,
-	"display_name" text,
+	"first_name" varchar(80),
+	"last_name" varchar(80),
+	"twitter" varchar(64),
+	"twitch" varchar(64),
 	"avatar_url" text,
 	"bio" varchar(500),
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,

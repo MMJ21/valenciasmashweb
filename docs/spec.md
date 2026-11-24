@@ -252,7 +252,7 @@ proposed -> accepted -> reported -> confirmed
 ## 8. Configuración (`app_config`, editable por admin)
 `pm.max_wager=1000`, `pm.mm_wager=100`, `pm.max_planned_per_day=5`, `pm.proposal_ttl_h=48`, `pm.report_ttl_d=7`, `pm.min_sets_duelist=5`, `pm.mm_queue_ttl_h=24`, `pm.mm_repeat_per_week=1`, `elo.initial=1000`, `elo.k=32`, `ranking.active_algorithm=elo`, `ranking.min_tournaments=1`.
 
-Configuración de autenticación/cuenta: `ADMIN_EMAILS` es la lista separada por comas de correos que reciben `admin` al registrarse; el resto empieza como `user`. El rate limit de Better Auth es persistente en BD en producción. La ficha admite dos personajes como máximo (principal y secundario opcional). Las contraseñas usan PBKDF2-HMAC-SHA-256 con 600 000 iteraciones; este coste DEBE validarse en Workers antes del despliegue público, dado NFR-004.
+Configuración de autenticación/cuenta: `ADMIN_EMAILS` es la lista separada por comas de correos que reciben `admin` al registrarse; el resto empieza como `user`. El rate limit de Better Auth es persistente en BD en producción. La ficha admite dos personajes como máximo (principal y secundario opcional). Las contraseñas nuevas usan PBKDF2-HMAC-SHA-256 con 100 000 iteraciones, valor conservador mientras se valida el límite efectivo y la CPU del Worker desplegado (NFR-004, ADR-0012).
 
 ## 9. Estructura del proyecto
 ```
@@ -311,3 +311,4 @@ Cada tarea se cierra cuando sus AC pasan.
 9. **Service worker en OpenNext/Cloudflare:** validar compatibilidad (Serwist) en la fase 0 con un spike, antes de la fase 6.
 10. **Push en iOS:** requiere PWA instalada y iOS 16.4+. Adopción limitada, y las notificaciones in-app (campana) son el respaldo.
 11. **Límite de CPU del plan gratuito** al enviar push a muchos suscriptores: enviar en lotes pequeños con `waitUntil`.
+12. **PBKDF2 en Workers:** hay un reporte de producción que observa un máximo de 100 000 iteraciones con `compatibility_date` 2026-10-04, mientras `wrangler dev --local` con `compatibility_date` 2026-11-20 aceptó 100 001. Validar el límite del servicio gestionado y CPU antes de producción. Ver ADR-0012.

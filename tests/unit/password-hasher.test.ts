@@ -9,7 +9,7 @@ describe("PBKDF2 password hashing", () => {
   });
 
   it("creates a versioned salted hash instead of storing the password", () => {
-    expect(encodedHash).toMatch(/^pbkdf2-sha256\$600000\$/);
+    expect(encodedHash).toMatch(/^pbkdf2-sha256\$100000\$/);
     expect(encodedHash).not.toContain("correct horse battery staple");
   });
 
@@ -27,7 +27,7 @@ describe("PBKDF2 password hashing", () => {
       false,
     );
     await expect(
-      verifyPasswordHash({ hash: "pbkdf2-sha256$1$abc$abc", password: "anything" }),
+      verifyPasswordHash({ hash: "pbkdf2-sha256$100001$abc$abc", password: "anything" }),
     ).resolves.toBe(false);
   });
 });
