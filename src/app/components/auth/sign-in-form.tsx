@@ -15,21 +15,26 @@ export function SignInForm(): React.JSX.Element {
     setNeedsVerification(false);
     setIsSubmitting(true);
     const formData = new FormData(event.currentTarget);
-    const result = await authClient.signIn.username({
-      username: String(formData.get("username") ?? "").trim(),
-      password: String(formData.get("password") ?? ""),
-    });
-    setIsSubmitting(false);
-    if (result.error !== null) {
-      setNeedsVerification(result.error.status === 403);
-      setMessage(
-        result.error.status === 403
-          ? "Verifica tu correo antes de iniciar sesión. Puedes solicitar otro enlace desde aquí."
-          : (result.error.message ?? "Usuario o contraseña incorrectos."),
-      );
-      return;
+    try {
+      const result = await authClient.signIn.username({
+        username: String(formData.get("username") ?? "").trim(),
+        password: String(formData.get("password") ?? ""),
+      });
+      if (result.error !== null) {
+        setNeedsVerification(result.error.status === 403);
+        setMessage(
+          result.error.status === 403
+            ? "Verifica tu correo antes de iniciar sesión. Puedes solicitar otro enlace desde aquí."
+            : (result.error.message ?? "Usuario o contraseña incorrectos."),
+        );
+        return;
+      }
+      window.location.assign("/account");
+    } catch {
+      setMessage("No se pudo conectar con el servidor. Inténtalo de nuevo.");
+    } finally {
+      setIsSubmitting(false);
     }
-    window.location.assign("/account");
   }
 
   return (

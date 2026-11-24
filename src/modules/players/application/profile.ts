@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { AppError } from "@/lib/errors";
 import * as authSchema from "@/lib/db/auth-schema";
 import type { PlayerProfileInput } from "../domain/profile-input";
@@ -120,11 +120,22 @@ export async function updatePlayerProfile(input: UpdatePlayerProfileInput): Prom
     eq(schema.players.id, player.id),
     eq(schema.players.userId, input.userId),
   );
+  const activeUser = and(eq(authSchema.user.id, input.userId), isNull(authSchema.user.deletedAt));
   const deleteCharacters = database
     .delete(schema.playerCharacters)
     .where(eq(schema.playerCharacters.playerId, player.id));
 
   if ("batch" in database) {
+    const lockActiveUser = database.execute(sql`
+      SELECT 1 / COUNT(*)
+      FROM (
+        SELECT ${authSchema.user.id}
+        FROM ${authSchema.user}
+        WHERE ${authSchema.user.id} = ${input.userId}
+          AND ${authSchema.user.deletedAt} IS NULL
+        FOR UPDATE
+      ) AS active_user
+    `);
     const updatePlayer = database.update(schema.players).set(profileChanges).where(playerOwnership);
     const assertOwnership = database.execute(sql`
       SELECT 1 / COUNT(*)
@@ -135,11 +146,12 @@ export async function updatePlayerProfile(input: UpdatePlayerProfileInput): Prom
 
     // Neon HTTP batches run transactionally; the guard aborts before character writes on a race.
     if (input.characters.length === 0) {
-      await database.batch([updatePlayer, assertOwnership, deleteCharacters]);
+      await database.batch([lockActiveUser, updatePlayer, assertOwnership, deleteCharacters]);
       return;
     }
 
     await database.batch([
+      lockActiveUser,
       updatePlayer,
       assertOwnership,
       deleteCharacters,
@@ -155,6 +167,16 @@ export async function updatePlayerProfile(input: UpdatePlayerProfileInput): Prom
   }
 
   await database.transaction(async (transaction) => {
+    const [owner] = await transaction
+      .select({ id: authSchema.user.id })
+      .from(authSchema.user)
+      .where(activeUser)
+      .for("update")
+      .limit(1);
+    if (owner === undefined) {
+      throw new AppError("La cuenta está en proceso de eliminación.", "CONFLICT");
+    }
+
     const updatedPlayers = await transaction
       .update(schema.players)
       .set(profileChanges)

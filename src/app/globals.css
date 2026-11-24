@@ -448,7 +448,7 @@ button {
 
 .ranking-position {
   width: fit-content;
-  background: linear-gradient(145deg, #ed9c36, #58b4e5);
+  background: linear-gradient(145deg, #9a4f00, #175c7a);
   background-clip: text;
   color: transparent;
   font-size: 3rem;
@@ -1135,7 +1135,17 @@ button {
   }
 
   .header-inner {
-    min-height: 68px;
+    display: grid;
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.55rem;
+    padding-block: 0.65rem;
+  }
+
+  .header-actions {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 
   .primary-nav {

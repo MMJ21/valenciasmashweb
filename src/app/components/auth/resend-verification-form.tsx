@@ -9,18 +9,24 @@ export function ResendVerificationForm(): React.JSX.Element {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
+    setMessage(undefined);
     setIsSubmitting(true);
     const formData = new FormData(event.currentTarget);
-    const result = await authClient.sendVerificationEmail({
-      email: String(formData.get("email") ?? "").trim(),
-      callbackURL: "/auth/verified",
-    });
-    setIsSubmitting(false);
-    setMessage(
-      result.error === null
-        ? "Si la cuenta necesita verificar el correo, enviaremos un nuevo enlace."
-        : (result.error.message ?? "No se pudo enviar el correo."),
-    );
+    try {
+      const result = await authClient.sendVerificationEmail({
+        email: String(formData.get("email") ?? "").trim(),
+        callbackURL: "/auth/verified",
+      });
+      setMessage(
+        result.error === null
+          ? "Si la cuenta necesita verificar el correo, enviaremos un nuevo enlace."
+          : (result.error.message ?? "No se pudo enviar el correo."),
+      );
+    } catch {
+      setMessage("No se pudo conectar con el servidor. Inténtalo de nuevo.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (

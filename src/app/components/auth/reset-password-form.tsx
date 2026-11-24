@@ -20,16 +20,21 @@ export function ResetPasswordForm(): React.JSX.Element {
 
     setIsSubmitting(true);
     const formData = new FormData(event.currentTarget);
-    const result = await authClient.resetPassword({
-      newPassword: String(formData.get("password") ?? ""),
-      token,
-    });
-    setIsSubmitting(false);
-    if (result.error !== null) {
-      setMessage(result.error.message ?? "No se pudo cambiar la contraseña.");
-      return;
+    try {
+      const result = await authClient.resetPassword({
+        newPassword: String(formData.get("password") ?? ""),
+        token,
+      });
+      if (result.error !== null) {
+        setMessage(result.error.message ?? "No se pudo cambiar la contraseña.");
+        return;
+      }
+      setSuccess(true);
+    } catch {
+      setMessage("No se pudo conectar con el servidor. Inténtalo de nuevo.");
+    } finally {
+      setIsSubmitting(false);
     }
-    setSuccess(true);
   }
 
   if (success) {

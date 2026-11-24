@@ -9,20 +9,26 @@ export function ForgotPasswordForm(): React.JSX.Element {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
+    setMessage(undefined);
     setIsSubmitting(true);
     const formData = new FormData(event.currentTarget);
-    const result = await authClient.requestPasswordReset({
-      email: String(formData.get("email") ?? "").trim(),
-      redirectTo: "/auth/reset-password",
-    });
-    setIsSubmitting(false);
-    if (result.error !== null) {
-      setMessage(result.error.message ?? "No se pudo enviar el correo. Inténtalo más tarde.");
-      return;
+    try {
+      const result = await authClient.requestPasswordReset({
+        email: String(formData.get("email") ?? "").trim(),
+        redirectTo: "/auth/reset-password",
+      });
+      if (result.error !== null) {
+        setMessage(result.error.message ?? "No se pudo enviar el correo. Inténtalo más tarde.");
+        return;
+      }
+      setMessage(
+        "Si el correo está registrado, recibirás instrucciones para restablecer la contraseña.",
+      );
+    } catch {
+      setMessage("No se pudo conectar con el servidor. Inténtalo de nuevo.");
+    } finally {
+      setIsSubmitting(false);
     }
-    setMessage(
-      "Si el correo está registrado, recibirás instrucciones para restablecer la contraseña.",
-    );
   }
 
   return (

@@ -76,8 +76,12 @@ export function ProfileForm({ initialProfile }: ProfileFormProps): React.JSX.Ele
           Nick
           <input
             autoComplete="nickname"
+            disabled={isSubmitting}
             maxLength={64}
-            onChange={(event) => setGamertag(event.currentTarget.value)}
+            onChange={(event) => {
+              setGamertag(event.currentTarget.value);
+              setSaved(false);
+            }}
             required
             value={gamertag}
           />
@@ -87,8 +91,12 @@ export function ProfileForm({ initialProfile }: ProfileFormProps): React.JSX.Ele
             Nombre
             <input
               autoComplete="given-name"
+              disabled={isSubmitting}
               maxLength={80}
-              onChange={(event) => setFirstName(event.currentTarget.value)}
+              onChange={(event) => {
+                setFirstName(event.currentTarget.value);
+                setSaved(false);
+              }}
               required
               value={firstName}
             />
@@ -97,8 +105,12 @@ export function ProfileForm({ initialProfile }: ProfileFormProps): React.JSX.Ele
             Apellidos
             <input
               autoComplete="family-name"
+              disabled={isSubmitting}
               maxLength={80}
-              onChange={(event) => setLastName(event.currentTarget.value)}
+              onChange={(event) => {
+                setLastName(event.currentTarget.value);
+                setSaved(false);
+              }}
               required
               value={lastName}
             />
@@ -109,8 +121,12 @@ export function ProfileForm({ initialProfile }: ProfileFormProps): React.JSX.Ele
             Twitter / X
             <input
               autoComplete="off"
+              disabled={isSubmitting}
               maxLength={64}
-              onChange={(event) => setTwitter(event.currentTarget.value)}
+              onChange={(event) => {
+                setTwitter(event.currentTarget.value);
+                setSaved(false);
+              }}
               placeholder="@usuario"
               value={twitter}
             />
@@ -119,8 +135,12 @@ export function ProfileForm({ initialProfile }: ProfileFormProps): React.JSX.Ele
             Twitch
             <input
               autoComplete="off"
+              disabled={isSubmitting}
               maxLength={64}
-              onChange={(event) => setTwitch(event.currentTarget.value)}
+              onChange={(event) => {
+                setTwitch(event.currentTarget.value);
+                setSaved(false);
+              }}
               placeholder="@usuario"
               value={twitch}
             />
@@ -129,8 +149,12 @@ export function ProfileForm({ initialProfile }: ProfileFormProps): React.JSX.Ele
         <label className="form-field">
           Biografía <span className="field-hint">{bio.length}/500</span>
           <textarea
+            disabled={isSubmitting}
             maxLength={500}
-            onChange={(event) => setBio(event.currentTarget.value)}
+            onChange={(event) => {
+              setBio(event.currentTarget.value);
+              setSaved(false);
+            }}
             rows={5}
             value={bio}
           />
@@ -144,13 +168,14 @@ export function ProfileForm({ initialProfile }: ProfileFormProps): React.JSX.Ele
         </p>
         <div className="character-dropdown-grid">
           <CharacterDropdown
+            disabled={isSubmitting}
             fieldId="main-character"
             label="Personaje principal"
             onSelect={updatePrimaryCharacter}
             selectedId={primaryCharacterId}
           />
           <CharacterDropdown
-            disabled={primaryCharacterId === null}
+            disabled={isSubmitting || primaryCharacterId === null}
             excludedId={primaryCharacterId}
             fieldId="secondary-character"
             label="Personaje secundario"

@@ -28,7 +28,7 @@ export function DeleteAccountForm(): React.JSX.Element {
       window.location.assign("/");
     } catch {
       setMessage(
-        "No se pudo conectar con el servidor. Tu cuenta sigue activa; puedes volver a intentarlo.",
+        "No se pudo confirmar el resultado. Comprueba si puedes iniciar sesión antes de volver a intentarlo.",
       );
     } finally {
       setIsSubmitting(false);

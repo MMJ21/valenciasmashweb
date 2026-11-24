@@ -2,7 +2,7 @@ import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
 import { username } from "better-auth/plugins";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { env } from "@/lib/config/env";
 import * as authSchema from "@/lib/db/auth-schema";
 import { createPlayersDatabase } from "@/modules/players/infra/database";
@@ -18,6 +18,65 @@ const adminEmails = new Set(
     .map((email) => email.trim().toLocaleLowerCase("en-US"))
     .filter((email) => email.length > 0),
 );
+
+const anonymizedPlayerFields = {
+  startggPlayerId: null,
+  startggSlug: null,
+  gamertag: null,
+  firstName: null,
+  lastName: null,
+  twitter: null,
+  twitch: null,
+  avatarUrl: null,
+  bio: null,
+};
+
+async function prepareAccountDeletion(userId: string): Promise<void> {
+  const database = await createPlayersDatabase();
+  const lockUser = database.execute(sql`
+    SELECT 1 / COUNT(*)
+    FROM (
+      SELECT ${authSchema.user.id}
+      FROM ${authSchema.user}
+      WHERE ${authSchema.user.id} = ${userId}
+      FOR UPDATE
+    ) AS locked_user
+  `);
+  const markDeleted = database
+    .update(authSchema.user)
+    .set({ deletedAt: sql`COALESCE(${authSchema.user.deletedAt}, now())` })
+    .where(eq(authSchema.user.id, userId));
+  const anonymizePlayer = database
+    .update(playerSchema.players)
+    .set(anonymizedPlayerFields)
+    .where(eq(playerSchema.players.userId, userId));
+
+  if ("batch" in database) {
+    await database.batch([lockUser, markDeleted, anonymizePlayer]);
+    return;
+  }
+
+  await database.transaction(async (transaction) => {
+    const [existingUser] = await transaction
+      .select({ id: authSchema.user.id })
+      .from(authSchema.user)
+      .where(eq(authSchema.user.id, userId))
+      .for("update")
+      .limit(1);
+    if (existingUser === undefined) {
+      throw new APIError("NOT_FOUND", { message: "No se encontró la cuenta." });
+    }
+
+    await transaction
+      .update(authSchema.user)
+      .set({ deletedAt: sql`COALESCE(${authSchema.user.deletedAt}, now())` })
+      .where(eq(authSchema.user.id, userId));
+    await transaction
+      .update(playerSchema.players)
+      .set(anonymizedPlayerFields)
+      .where(eq(playerSchema.players.userId, userId));
+  });
+}
 
 function createAuth() {
   return createPlayersDatabase().then((database) =>
@@ -84,22 +143,7 @@ function createAuth() {
         deleteUser: {
           enabled: true,
           beforeDelete: async (deletedUser) => {
-            const database = await createPlayersDatabase();
-            await database
-              .update(playerSchema.players)
-              .set({
-                startggPlayerId: null,
-                startggSlug: null,
-                gamertag: null,
-                firstName: null,
-                lastName: null,
-                twitter: null,
-                twitch: null,
-                avatarUrl: null,
-                bio: null,
-              })
-              // Keep the relationship until the user DELETE succeeds; the FK detaches it atomically.
-              .where(eq(playerSchema.players.userId, deletedUser.id));
+            await prepareAccountDeletion(deletedUser.id);
           },
         },
       },
