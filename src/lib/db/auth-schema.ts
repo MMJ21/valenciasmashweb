@@ -90,7 +90,8 @@ export const verification = pgTable(
 );
 
 export const rateLimit = pgTable("rateLimit", {
-  key: varchar("key", { length: 255 }).primaryKey(),
+  id: uuid("id").defaultRandom().primaryKey(),
+  key: varchar("key", { length: 255 }).notNull().unique(),
   count: integer("count").notNull(),
   lastRequest: bigint("last_request", { mode: "number" }).notNull(),
 });

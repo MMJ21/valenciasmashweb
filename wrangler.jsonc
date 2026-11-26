@@ -5,5 +5,6 @@
   "compatibility_date": "2026-11-20",
   "compatibility_flags": ["nodejs_compat"],
   "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
-  "r2_buckets": [{ "binding": "PLAYER_IMAGES", "bucket_name": "valenciasmash" }],
+  "workers_dev": true,
+  "preview_urls": false,
 }
