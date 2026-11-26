@@ -21,6 +21,14 @@ function escapeHtml(value: string): string {
 }
 
 export async function sendTransactionalEmail(message: TransactionalEmail): Promise<void> {
+  if (process.env.PLAYWRIGHT_TEST === "true") {
+    if (process.env.NODE_ENV !== "development") {
+      throw new Error("La captura de correo E2E solo se permite en desarrollo local.");
+    }
+    console.info(`[correo E2E] ${message.to}\n${message.actionUrl}`);
+    return;
+  }
+
   if (env.RESEND_API_KEY === undefined || env.EMAIL_FROM === undefined) {
     if (process.env.NODE_ENV === "development") {
       console.info(`[correo local] ${message.subject} → ${message.to}\n${message.actionUrl}`);

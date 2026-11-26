@@ -205,7 +205,13 @@ function createAuth() {
         max: 10,
         storage: process.env.NODE_ENV === "development" ? "memory" : "database",
         customRules: {
-          "/sign-up/email": { window: 60, max: 3 },
+          "/sign-up/email": {
+            window: 60,
+            max:
+              process.env.NODE_ENV === "development" && process.env.PLAYWRIGHT_TEST === "true"
+                ? 10
+                : 3,
+          },
           "/send-verification-email": { window: 3600, max: 3 },
           "/request-password-reset": { window: 3600, max: 3 },
           "/sign-in/username": { window: 60, max: 10 },

@@ -2,6 +2,7 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import { getPublicPlayerProfile } from "@/modules/players";
 import { CHARACTERS } from "@/modules/players";
+import { PlayerBio } from "@/app/components/players/player-bio";
 
 export const dynamic = "force-dynamic";
 
@@ -67,7 +68,7 @@ export default async function PlayerPage({ params }: PlayerPageProps): Promise<R
         {profile.bio === null || profile.bio.length === 0 ? (
           <p className="auth-description">Este jugador todavía no ha escrito su biografía.</p>
         ) : (
-          <p className="profile-bio">{profile.bio}</p>
+          <PlayerBio bio={profile.bio} />
         )}
       </section>
 
