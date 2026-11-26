@@ -1,22 +1,15 @@
-import { getAuth } from "@/modules/auth";
-import { env } from "@/lib/config/env";
+import { AuthConfigurationError, getAuth } from "@/modules/auth";
 
 async function handleAuthRequest(request: Request): Promise<Response> {
-  if (
-    process.env.NODE_ENV === "production" &&
-    (env.BETTER_AUTH_SECRET === undefined ||
-      env.BETTER_AUTH_URL === undefined ||
-      env.RESEND_API_KEY === undefined ||
-      env.EMAIL_FROM === undefined)
-  ) {
-    return Response.json(
-      { message: "La autenticación no está configurada en el servidor." },
-      { status: 503 },
-    );
+  try {
+    const auth = await getAuth();
+    return auth.handler(request);
+  } catch (error: unknown) {
+    if (error instanceof AuthConfigurationError) {
+      return Response.json({ message: error.message }, { status: 503 });
+    }
+    throw error;
   }
-
-  const auth = await getAuth();
-  return auth.handler(request);
 }
 
 export function GET(request: Request): Promise<Response> {

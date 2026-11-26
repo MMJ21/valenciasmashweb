@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getPublicPlayerProfile } from "@/modules/players";
 import { CHARACTERS } from "@/modules/players";
 
-export const revalidate = 300;
+export const dynamic = "force-dynamic";
 
 interface PlayerPageProps {
   readonly params: Promise<{ readonly username: string }>;

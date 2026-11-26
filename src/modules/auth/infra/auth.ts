@@ -20,6 +20,13 @@ const adminEmails = new Set(
     .filter((email) => email.length > 0),
 );
 
+export class AuthConfigurationError extends Error {
+  constructor() {
+    super("La autenticación no está configurada en el servidor.");
+    this.name = "AuthConfigurationError";
+  }
+}
+
 const anonymizedPlayerFields = {
   startggPlayerId: null,
   startggSlug: null,
@@ -80,6 +87,16 @@ async function prepareAccountDeletion(userId: string): Promise<void> {
 }
 
 function createAuth() {
+  if (
+    process.env.NODE_ENV === "production" &&
+    (env.BETTER_AUTH_SECRET === undefined ||
+      env.BETTER_AUTH_URL === undefined ||
+      env.RESEND_API_KEY === undefined ||
+      env.EMAIL_FROM === undefined)
+  ) {
+    throw new AuthConfigurationError();
+  }
+
   return createPlayersDatabase().then((database) =>
     betterAuth({
       appName: "ValenciaSmash",
@@ -207,6 +224,9 @@ export type ValenciaAuth = Awaited<ReturnType<typeof createAuth>>;
 let authPromise: Promise<ValenciaAuth> | undefined;
 
 export function getAuth(): Promise<ValenciaAuth> {
-  authPromise ??= createAuth();
+  authPromise ??= createAuth().catch((error: unknown) => {
+    authPromise = undefined;
+    throw error;
+  });
   return authPromise;
 }

@@ -36,7 +36,7 @@ Al registrarte en local, el enlace de verificación se imprime en la consola de 
 - Sin `DATABASE_URL`, el entorno de desarrollo usa PGlite, un Postgres embebido que no requiere instalar Docker ni un servidor. Los datos se guardan en `.data/pglite/` (ignorado por Git).
 - `pnpm db:local` aplica las migraciones Drizzle pendientes y agrega datos de ejemplo (admin, importer, usuario normal y jugador fantasma). Se puede repetir sin duplicar registros.
 - `pnpm db:reset` elimina **solo** `.data/pglite/` y la vuelve a crear con la migración y las semillas.
-- El historial Drizzle se consolidó en una migración inicial antes de desplegar Neon; si tu PGlite conserva el historial anterior, ejecuta `pnpm db:reset`.
+- El historial Drizzle se consolidó en la migración inicial `0000` antes del primer despliegue. Esa baseline es solo para bases nuevas y no actualiza de forma segura esquemas previos; si tu PGlite conserva el historial anterior, ejecuta `pnpm db:reset`. Desde el primer despliegue real, cualquier cambio de esquema debe publicarse como migración incremental, preservando los datos y vínculos existentes.
 - Para usar Neon en desarrollo, define `DATABASE_URL` en `.env.local`; esa URL tiene prioridad sobre PGlite.
 - Las nuevas cuentas reciben rol `admin` si su correo aparece en `ADMIN_EMAILS` (separados por comas); las demás empiezan como `user`.
 - Sin `RESEND_API_KEY` y `EMAIL_FROM`, los correos de verificación y recuperación se muestran en la consola local. En producción ambos secretos son obligatorios.

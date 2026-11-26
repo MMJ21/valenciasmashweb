@@ -54,7 +54,7 @@ async function loadProfile(
     })
     .from(authSchema.user)
     .innerJoin(schema.players, eq(schema.players.userId, authSchema.user.id))
-    .where(eq(authSchema.user.id, userId))
+    .where(and(eq(authSchema.user.id, userId), isNull(authSchema.user.deletedAt)))
     .limit(1);
 
   if (record === undefined) {
@@ -91,7 +91,7 @@ export async function getPublicPlayerProfile(username: string): Promise<PlayerPr
   const [record] = await database
     .select({ userId: authSchema.user.id })
     .from(authSchema.user)
-    .where(eq(authSchema.user.username, username))
+    .where(and(eq(authSchema.user.username, username), isNull(authSchema.user.deletedAt)))
     .limit(1);
   return record === undefined ? null : loadProfile(database, record.userId);
 }
