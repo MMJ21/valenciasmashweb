@@ -2,13 +2,14 @@ import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
 import { username } from "better-auth/plugins";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { env } from "@/lib/config/env";
 import * as authSchema from "@/lib/db/auth-schema";
 import { ensurePlayerForUser } from "@/modules/players";
 import { createPlayersDatabase } from "@/modules/players/infra/database";
 import * as playerSchema from "@/modules/players/infra/schema";
 import { resolveInitialRole } from "../domain/roles";
+import { TERMS_VERSION } from "../domain/legal-versions";
 import { sendTransactionalEmail } from "./email-sender";
 import { hashPassword, verifyPasswordHash } from "./password-hasher";
 import { deleteAvatar } from "@/modules/players/infra/avatar-storage";
@@ -54,9 +55,20 @@ async function prepareAccountDeletion(userId: string): Promise<void> {
     .update(playerSchema.players)
     .set(anonymizedPlayerFields)
     .where(eq(playerSchema.players.userId, userId));
+  const deletePlayerCharacters = database
+    .delete(playerSchema.playerCharacters)
+    .where(
+      inArray(
+        playerSchema.playerCharacters.playerId,
+        database
+          .select({ id: playerSchema.players.id })
+          .from(playerSchema.players)
+          .where(eq(playerSchema.players.userId, userId)),
+      ),
+    );
 
   if ("batch" in database) {
-    await database.batch([lockUser, markDeleted, anonymizePlayer]);
+    await database.batch([lockUser, markDeleted, anonymizePlayer, deletePlayerCharacters]);
     return;
   }
 
@@ -79,6 +91,17 @@ async function prepareAccountDeletion(userId: string): Promise<void> {
       .update(playerSchema.players)
       .set(anonymizedPlayerFields)
       .where(eq(playerSchema.players.userId, userId));
+    await transaction
+      .delete(playerSchema.playerCharacters)
+      .where(
+        inArray(
+          playerSchema.playerCharacters.playerId,
+          transaction
+            .select({ id: playerSchema.players.id })
+            .from(playerSchema.players)
+            .where(eq(playerSchema.players.userId, userId)),
+        ),
+      );
   });
 }
 
@@ -153,6 +176,8 @@ function createAuth() {
           },
           adultConfirmed: { type: "boolean", required: true },
           termsAccepted: { type: "boolean", required: true },
+          termsAcceptedAt: { type: "date", required: false, input: false },
+          termsVersion: { type: "string", required: false, input: false },
         },
         deleteUser: {
           enabled: true,
@@ -174,6 +199,8 @@ function createAuth() {
                 data: {
                   ...newUser,
                   role: resolveInitialRole(),
+                  termsAcceptedAt: new Date(),
+                  termsVersion: TERMS_VERSION,
                 },
               };
             },

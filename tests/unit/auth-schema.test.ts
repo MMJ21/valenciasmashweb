@@ -20,4 +20,10 @@ describe("Better Auth Drizzle schema", () => {
       ).toContain("id");
     }
   });
+
+  it("stores the accepted terms version and timestamp without requiring legacy backfill", () => {
+    const columns = getTableConfig(authSchema.user).columns;
+    expect(columns.find(({ name }) => name === "terms_accepted_at")?.notNull).toBe(false);
+    expect(columns.find(({ name }) => name === "terms_version")?.notNull).toBe(false);
+  });
 });

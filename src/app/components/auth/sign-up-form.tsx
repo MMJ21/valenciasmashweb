@@ -17,6 +17,12 @@ export function SignUpForm(): React.JSX.Element {
     const username = String(formData.get("username") ?? "").trim();
     const email = String(formData.get("email") ?? "").trim();
     const password = String(formData.get("password") ?? "");
+    const acceptedTerms = formData.get("termsAccepted") === "on";
+    if (!acceptedTerms) {
+      setMessage("Debes confirmar que eres mayor de edad y aceptar los términos.");
+      setIsSubmitting(false);
+      return;
+    }
     try {
       const response = await fetch("/api/auth/sign-up/email", {
         method: "POST",
@@ -26,8 +32,8 @@ export function SignUpForm(): React.JSX.Element {
           username,
           email,
           password,
-          adultConfirmed: true,
-          termsAccepted: true,
+          adultConfirmed: acceptedTerms,
+          termsAccepted: acceptedTerms,
           callbackURL: "/auth/verified",
         }),
       });
@@ -106,7 +112,10 @@ export function SignUpForm(): React.JSX.Element {
         <input name="termsAccepted" required type="checkbox" />
         <span>
           Confirmo que soy mayor de edad y acepto los{" "}
-          <Link href="/legal/terms">términos de uso</Link>.
+          <Link href="/legal/terms">términos de uso</Link>. Consulta la{" "}
+          <Link href="/legal/privacy">política de privacidad</Link>, el{" "}
+          <Link href="/legal/aviso-legal">aviso legal</Link> y la{" "}
+          <Link href="/legal/cookies">política de cookies</Link>.
         </span>
       </label>
       <p className="auth-switch">

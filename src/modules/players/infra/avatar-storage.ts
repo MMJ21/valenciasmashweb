@@ -11,7 +11,7 @@ interface AvatarBucket {
   get(key: string): Promise<AvatarObject | null>;
   put(
     key: string,
-    value: ReadableStream<Uint8Array>,
+    value: ArrayBuffer,
     options: {
       readonly httpMetadata: { readonly contentType: string; readonly cacheControl: string };
     },
@@ -45,7 +45,7 @@ export async function saveAvatar(userId: string, source: Uint8Array): Promise<st
     throw new Error("No se pudo procesar la imagen.");
   }
 
-  await env.AVATARS.put(avatarKey(userId), response.body, {
+  await env.AVATARS.put(avatarKey(userId), await response.arrayBuffer(), {
     httpMetadata: { contentType: "image/webp", cacheControl: "public, max-age=3600" },
   });
   return `/api/players/${encodeURIComponent(userId)}/avatar?v=${crypto.randomUUID()}`;
@@ -57,7 +57,6 @@ export async function getAvatar(userId: string): Promise<AvatarObject | null> {
 }
 
 export async function deleteAvatar(userId: string): Promise<void> {
-  if (process.env.NODE_ENV !== "production") return;
   const { env } = await getCloudflareContext({ async: true });
   await env.AVATARS.delete(avatarKey(userId));
 }

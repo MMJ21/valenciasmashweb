@@ -30,7 +30,8 @@ Web de la comunidad ValenciaSmash (Smash Ultimate, torneos en start.gg) con: lan
 | Imágenes | Cloudflare R2 |
 | Validación | Zod en todas las entradas del servidor |
 | Tests | Vitest (unitarios), Playwright (E2E) |
-| CI | GitHub Actions: lint, typecheck y tests; automático en `master`, también manual (`workflow_dispatch`) |
+| CI | GitHub Actions: lint, typecheck, unit tests, Playwright E2E con Chromium y build; automático en PR y `master`, también manual (`workflow_dispatch`) |
+| CD | GitHub Actions: en `push` a `master` aplica migraciones Neon, despliega Cloudflare y comprueba `/api/health`; requiere aprobación del entorno `production` (ADR-0017) |
 
 El contexto, las alternativas y las consecuencias de estas decisiones se recogen en [`docs/adr/`](adr/README.md).
 
@@ -107,13 +108,18 @@ app_config       (key PK, value jsonb)
 - **REQ-202** La biografía DEBE tratarse como texto plano, sin interpretar HTML ni Markdown en v1.
 - **REQ-203** Foto: JPEG/PNG/WebP, máx. 2 MiB [CFG]; el servidor valida la firma del formato, recodifica con Cloudflare Images a WebP 512×512 (recorte `cover`) y guarda el resultado en un bucket privado R2. La subida pasa por el endpoint autenticado; no se conserva el original. La URL pública se sirve mediante el Worker.
 - **REQ-204** La ficha pública `/players/[username]` muestra: Nick, nombre y apellidos, redes sociales, personajes, ranking actual, historial de torneos, estadísticas de point matches y títulos.
-- **REQ-205** El usuario DEBE poder eliminar su cuenta. Se anonimiza el `player` (se conserva el historial de torneos).
+- **REQ-205** El usuario DEBE poder eliminar su cuenta. Se eliminan credenciales, sesión, vínculos y personajes elegidos, y se anonimiza el `player`; se conserva el historial competitivo asociado de forma anónima.
 - **REQ-206** El sistema DEBE enviar enlaces de verificación y recuperación de contraseña por correo. En producción usa Resend; en desarrollo local los enlaces se muestran en la consola.
+- **REQ-207** Un usuario activo y autenticado DEBE poder descargar en JSON los datos personales que el servicio mantiene asociados a su cuenta (cuenta, ficha, personajes y vínculos implementados). El export no DEBE incluir contraseñas, hashes, tokens de sesión ni datos privados de otras personas; al añadir nuevas fuentes de datos personales se DEBE ampliar el export.
+- **REQ-208** El servicio DEBE publicar términos, aviso legal, política de privacidad y política de cookies accesibles desde el registro y el pie de página. Titular, contacto, finalidades, bases jurídicas, proveedores, transferencias, cookies y plazos DEBEN reflejar el servicio real y revisarse por una persona antes de abrir el registro al público.
 - **AC-200** Un usuario sin sesión no puede editar ninguna ficha (403).
 - **AC-201** Un archivo que no sea imagen o supere el límite se rechaza con mensaje claro.
 - **AC-202** Una foto válida se sirve como WebP de 512×512; al reemplazarla, el perfil muestra la nueva URL versionada y no se expone el objeto original.
 - **AC-203** La baja elimina la foto de R2 antes de anonimizar el perfil; si falla el borrado, la baja no se completa.
 - **AC-204** El contenido de la biografía se representa como texto: etiquetas como `<script>` y `<b>` no crean elementos HTML.
+- **AC-205** La exportación autenticada devuelve un JSON adjunto con `Cache-Control: no-store`; sin sesión responde 401 y el JSON no contiene credenciales ni secretos de sesión.
+- **AC-206** La exportación incluye la fecha y versión de aceptación de términos disponibles. Las cuentas antiguas sin registro histórico las muestran como `null`; no se inventa una fecha retroactiva.
+- **AC-207** Los términos, aviso legal, privacidad y cookies están enlazados desde el pie de página y el registro; los borradores identifican los datos que aún requieren completar o revisar.
 
 ### 6.3 Vinculación con start.gg
 - **REQ-210** Método principal: OAuth2 de start.gg (scope `user.identity`). Tras el callback se consulta `currentUser { id slug player { id gamerTag } }`.
@@ -255,7 +261,7 @@ proposed -> accepted -> reported -> confirmed
 ## 8. Configuración (`app_config`, editable por admin)
 `pm.max_wager=1000`, `pm.mm_wager=100`, `pm.max_planned_per_day=5`, `pm.proposal_ttl_h=48`, `pm.report_ttl_d=7`, `pm.min_sets_duelist=5`, `pm.mm_queue_ttl_h=24`, `pm.mm_repeat_per_week=1`, `elo.initial=1000`, `elo.k=32`, `ranking.active_algorithm=elo`, `ranking.min_tournaments=1`.
 
-Configuración de autenticación/cuenta: todas las cuentas nuevas empiezan como `user`; un operador promueve manualmente al administrador inicial con `pnpm admin:promote <correo>`, que exige correo verificado y cuenta activa. El rate limit de Better Auth es persistente en BD en producción. La ficha admite dos personajes como máximo (principal y secundario opcional). Las contraseñas nuevas usan PBKDF2-HMAC-SHA-256 con 100 000 iteraciones, valor conservador mientras se valida el límite efectivo y la CPU del Worker desplegado (NFR-004, ADR-0012).
+Configuración de autenticación/cuenta: todas las cuentas nuevas empiezan como `user`; un operador promueve manualmente al administrador inicial con `pnpm admin:promote <correo>`, que exige correo verificado y cuenta activa. La aceptación de términos registra versión y fecha UTC desde la migración `0002`; los registros anteriores quedan sin backfill histórico (`null`). El rate limit de Better Auth es persistente en BD en producción. La ficha admite dos personajes como máximo (principal y secundario opcional). Las contraseñas nuevas usan PBKDF2-HMAC-SHA-256 con 100 000 iteraciones, valor conservador mientras se valida el límite efectivo y la CPU del Worker desplegado (NFR-004, ADR-0012).
 
 ## 9. Estructura del proyecto
 ```
@@ -293,8 +299,9 @@ Cada tarea se cierra cuando sus AC pasan.
 - La migración `0003` elimina `players.display_name`; la ficha usa `first_name` y `last_name`.
 - La landing muestra un top 5 provisional mantenido en `modules/ranking/domain/current-ranking.ts` con los datos proporcionados por la comunidad (MVL/Diddy Kong, Nub/Joker, Samu/Roy, Sir William/Palutena y Raptor/Meta Knight, con sus variaciones). Aún no se calcula desde `ratings_snapshot`; eso corresponde a la Fase 3.
 - **Despliegue verificado:** registro, verificación por correo a otro destinatario, inicio de sesión, edición/guardado de ficha y baja de cuenta se probaron con Neon y Resend en el Worker real. PBKDF2 con 100 000 iteraciones funciona en el runtime desplegado; sigue pendiente medir el tiempo de CPU.
-- **Pendiente:** automatizar pruebas remotas del ciclo de foto de perfil, datos reales de torneos, cálculo persistente del ranking y revisión legal final de los términos. El remitente de Resend `send.valenciasmash.com` está verificado y probado; la política de privacidad y los términos deben revisarse antes de abrir el registro al público.
-- **Verificación local:** 22 pruebas unitarias. Playwright con Chromium cubre landing y ciclo de registro, verificación, inicio de sesión, edición de ficha y baja sobre PGlite; la foto de R2/Images solo se verificó manualmente en producción. `lint`, `typecheck`, `format:check`, `next build` y `test:e2e` comprobados.
+- **Pendiente:** automatizar pruebas remotas del ciclo de foto de perfil, aplicar la migración `0002` en Neon, datos reales de torneos, cálculo persistente del ranking y revisión humana/legal de la política de privacidad y los términos. La exportación JSON está implementada; la política publicada es un borrador con campos pendientes. El remitente de Resend `send.valenciasmash.com` está verificado y probado; no abrir el registro al público hasta completar los datos del responsable y revisar los textos.
+- **Despliegue continuo:** el workflow CD de GitHub Actions migra Neon, despliega el Worker y comprueba el healthcheck tras aprobación del entorno protegido `production` (ADR-0017). Pendiente crear el entorno, configurar reviewers y secretos, y validar la primera ejecución.
+- **Verificación local:** 23 pruebas unitarias. Playwright con Chromium cubre landing, exportación y ciclo de cuenta sobre PGlite; también sube y reemplaza una imagen mediante el binding Images local, comprueba el WebP 512×512 servido por R2 y verifica el borrado del objeto al eliminar la cuenta. La carga en Cloudflare real se comprobó manualmente; no se crean cuentas E2E ni se ejecutan pruebas destructivas contra producción. `lint`, `typecheck`, `format:check`, `next build` y `test:e2e` comprobados.
 - **Despliegue de base de datos:** la migración inicial consolidada `0000` solo se debe aplicar a una base nueva. La migración incremental `0001` añadió `rateLimit.id` conservando los contadores; las futuras modificaciones deben preservar datos y vínculos existentes.
 
 ## 11. Definición de hecho (DoD)

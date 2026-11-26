@@ -15,6 +15,13 @@
       "when": 1795688473484,
       "tag": "0001_mute_hellion",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1795695855368,
+      "tag": "0002_elite_zarda",
+      "breakpoints": true
     }
   ]
 }

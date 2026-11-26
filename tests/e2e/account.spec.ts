@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
 async function findVerificationUrl(email: string): Promise<string | null> {
   try {
@@ -17,19 +18,57 @@ async function findVerificationUrl(email: string): Promise<string | null> {
   }
 }
 
+async function uploadAvatar(page: Page): Promise<string> {
+  const uploadResponsePromise = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/players/me") && response.request().method() === "POST",
+  );
+  await page.getByLabel(/Foto de perfil/).setInputFiles({
+    name: "mario.png",
+    mimeType: "image/png",
+    buffer: await readFile(resolve(process.cwd(), "public/characters/mario.png")),
+  });
+  const uploadResponse = await uploadResponsePromise;
+  const uploadBody = await uploadResponse.text();
+  expect(uploadResponse.status(), uploadBody).toBe(200);
+  const uploadResult: unknown = JSON.parse(uploadBody);
+  if (
+    typeof uploadResult !== "object" ||
+    uploadResult === null ||
+    !("avatarUrl" in uploadResult) ||
+    typeof uploadResult.avatarUrl !== "string"
+  ) {
+    throw new Error("La respuesta de subida no incluyó avatarUrl.");
+  }
+  return uploadResult.avatarUrl;
+}
+
 test("REQ-200, REQ-201, REQ-205: registro, verificación, edición y baja", async ({ page }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(120_000);
   const suffix = `${Date.now()}${Math.floor(Math.random() * 1_000_000)}`;
   const username = `e2e${suffix}`;
   const email = `${username}@example.test`;
   const password = "ValenciaSmashE2E-2026!";
   const gamertag = `Nick${suffix}`;
 
+  const anonymousExport = await page.request.get("/api/account/export");
+  expect(anonymousExport.status()).toBe(401);
+
   await page.goto("/auth/sign-up");
   await page.getByLabel("Usuario").fill(username);
   await page.getByLabel("Correo electrónico").fill(email);
   await page.getByLabel("Contraseña").fill(password);
   await page.getByRole("checkbox").check();
+  await expect(
+    page.getByRole("link", { name: "política de privacidad", exact: true }),
+  ).toHaveAttribute("href", "/legal/privacy");
+  await expect(page.getByRole("link", { name: "aviso legal", exact: true })).toHaveAttribute(
+    "href",
+    "/legal/aviso-legal",
+  );
+  await expect(
+    page.getByRole("link", { name: "política de cookies", exact: true }),
+  ).toHaveAttribute("href", "/legal/cookies");
   const signUpResponsePromise = page.waitForResponse((response) =>
     response.url().endsWith("/api/auth/sign-up/email"),
   );
@@ -67,6 +106,8 @@ test("REQ-200, REQ-201, REQ-205: registro, verificación, edición y baja", asyn
   await page.getByLabel("Nick", { exact: true }).fill(gamertag);
   await page.getByLabel("Nombre", { exact: true }).fill("Prueba");
   await page.getByLabel("Apellidos", { exact: true }).fill("E2E");
+  await page.getByRole("button", { name: /Personaje principal/ }).click();
+  await page.getByRole("option", { name: "Mario", exact: true }).click();
   await expect(page.getByLabel("Nick", { exact: true })).toHaveValue(gamertag);
   await expect(page.getByLabel("Nombre", { exact: true })).toHaveValue("Prueba");
   await expect(page.getByLabel("Apellidos", { exact: true })).toHaveValue("E2E");
@@ -78,6 +119,65 @@ test("REQ-200, REQ-201, REQ-205: registro, verificación, edición y baja", asyn
   const profileResponse = await profileResponsePromise;
   expect(profileResponse.ok(), await profileResponse.text()).toBe(true);
   await expect(page.getByRole("status")).toContainText("Ficha guardada");
+
+  const firstAvatarUrl = await uploadAvatar(page);
+  const firstAvatarResponse = await page.request.get(firstAvatarUrl);
+  expect(firstAvatarResponse.status()).toBe(200);
+  expect(firstAvatarResponse.headers()["content-type"]).toContain("image/webp");
+  const firstAvatarBytes = await firstAvatarResponse.body();
+  expect(firstAvatarBytes.toString("ascii", 0, 4)).toBe("RIFF");
+  expect(firstAvatarBytes.toString("ascii", 8, 12)).toBe("WEBP");
+  const avatarPreview = page
+    .locator(".profile-form label")
+    .filter({ hasText: "Foto de perfil" })
+    .locator("img");
+  await expect
+    .poll(() =>
+      avatarPreview.evaluate((image) =>
+        image instanceof HTMLImageElement ? image.naturalWidth : 0,
+      ),
+    )
+    .toBe(512);
+
+  const replacementAvatarUrl = await uploadAvatar(page);
+  expect(replacementAvatarUrl).not.toBe(firstAvatarUrl);
+  const replacementAvatarResponse = await page.request.get(replacementAvatarUrl);
+  expect(replacementAvatarResponse.status()).toBe(200);
+  expect(replacementAvatarResponse.headers()["content-type"]).toContain("image/webp");
+  await expect
+    .poll(() =>
+      avatarPreview.evaluate((image) =>
+        image instanceof HTMLImageElement ? image.naturalWidth : 0,
+      ),
+    )
+    .toBe(512);
+
+  const exportResponse = await page.request.get("/api/account/export");
+  expect(exportResponse.status()).toBe(200);
+  expect(exportResponse.headers()["cache-control"]).toContain("no-store");
+  expect(exportResponse.headers()["content-disposition"]).toContain("attachment");
+  const exportedData: unknown = await exportResponse.json();
+  expect(exportedData).toMatchObject({
+    formatVersion: 1,
+    account: {
+      username,
+      email,
+      terms: {
+        accepted: true,
+        acceptedAt: expect.any(String),
+        version: "2026-11-26-v2",
+      },
+    },
+    player: {
+      gamertag,
+      firstName: "Prueba",
+      lastName: "E2E",
+      characters: [{ id: "mario", isMain: true }],
+    },
+  });
+  expect(JSON.stringify(exportedData)).not.toMatch(
+    /"(?:password|token|accessToken|refreshToken)"/i,
+  );
   await page.goto(`/players/${username}`);
   await expect(page.getByText(`Nick: ${gamertag}`)).toBeVisible();
   await expect(page.getByRole("heading", { name: "Prueba E2E" })).toBeVisible();
@@ -90,4 +190,6 @@ test("REQ-200, REQ-201, REQ-205: registro, verificación, edición y baja", asyn
 
   const publicProfileResponse = await page.goto(`/players/${username}`);
   expect(publicProfileResponse?.status()).toBe(404);
+  const deletedAvatarResponse = await page.request.get(replacementAvatarUrl);
+  expect(deletedAvatarResponse.status()).toBe(404);
 });

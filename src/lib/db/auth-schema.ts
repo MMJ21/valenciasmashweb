@@ -25,6 +25,8 @@ export const user = pgTable(
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     adultConfirmed: boolean("adult_confirmed").notNull().default(false),
     termsAccepted: boolean("terms_accepted").notNull().default(false),
+    termsAcceptedAt: timestamp("terms_accepted_at", { withTimezone: true }),
+    termsVersion: varchar("terms_version", { length: 32 }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

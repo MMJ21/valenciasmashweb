@@ -46,6 +46,9 @@ export default async function AccountPage(): Promise<React.JSX.Element> {
       <h1>Tu ficha de jugador</h1>
       <p className="auth-description">Elige cómo quieres aparecer en la comunidad.</p>
       <ProfileForm initialProfile={profile} />
+      <a className="button button-secondary" href="/api/account/export">
+        Descargar mis datos (JSON)
+      </a>
       <section aria-labelledby="delete-account-title" className="account-danger-zone">
         <h2 id="delete-account-title">Eliminar cuenta</h2>
         <p>Tu ficha se anonimizará y el historial competitivo se conservará.</p>
