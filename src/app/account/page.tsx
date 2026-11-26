@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { ProfileForm } from "@/app/components/players/profile-form";
 import { DeleteAccountForm } from "@/app/components/auth/delete-account-form";
 import { getAuth } from "@/modules/auth";
-import { getOwnPlayerProfile } from "@/modules/players";
+import { getOwnPlayerProfile, isAccountDeletionPending } from "@/modules/players";
 
 export const dynamic = "force-dynamic";
 
@@ -16,11 +16,25 @@ export default async function AccountPage(): Promise<React.JSX.Element> {
 
   const profile = await getOwnPlayerProfile(session.user.id);
   if (profile === null) {
+    const deletionPending = await isAccountDeletionPending(session.user.id);
     return (
       <main className="page-container auth-page">
         <section className="auth-card">
-          <h1>No se encontró tu ficha</h1>
-          <p className="auth-description">Contacta con el equipo para revisar tu cuenta.</p>
+          {deletionPending ? (
+            <>
+              <h1>Baja pendiente</h1>
+              <p className="auth-description">
+                La eliminación de tu cuenta no se completó. Confirma tu contraseña para
+                reintentarlo.
+              </p>
+              <DeleteAccountForm />
+            </>
+          ) : (
+            <>
+              <h1>No se encontró tu ficha</h1>
+              <p className="auth-description">Contacta con el equipo para revisar tu cuenta.</p>
+            </>
+          )}
         </section>
       </main>
     );

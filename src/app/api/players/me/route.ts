@@ -1,5 +1,6 @@
 import {
   getOwnPlayerProfile,
+  isAccountDeletionPending,
   playerProfileInputSchema,
   updatePlayerProfile,
 } from "@/modules/players";
@@ -14,6 +15,12 @@ export async function GET(request: Request): Promise<Response> {
 
   const profile = await getOwnPlayerProfile(session.user.id);
   if (profile === null) {
+    if (await isAccountDeletionPending(session.user.id)) {
+      return Response.json(
+        { message: "La cuenta está en proceso de eliminación. No se puede consultar la ficha." },
+        { status: 409 },
+      );
+    }
     return Response.json({ message: "No se encontró la ficha." }, { status: 404 });
   }
   return Response.json({ profile });

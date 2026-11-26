@@ -291,6 +291,7 @@ Cada tarea se cierra cuando sus AC pasan.
 - La landing muestra un top 5 provisional mantenido en `modules/ranking/domain/current-ranking.ts` con los datos proporcionados por la comunidad (MVL/Diddy Kong, Nub/Joker, Samu/Roy, Sir William/Palutena y Raptor/Meta Knight, con sus variaciones). Aún no se calcula desde `ratings_snapshot`; eso corresponde a la Fase 3.
 - **Pendiente:** subida/recodificación de fotos WebP a R2 (T-1.3), datos reales de torneos, cálculo persistente del ranking, y revisión legal final de los términos. Resend real no se valida hasta configurar dominio verificado y API key.
 - **Verificación local:** 17 pruebas unitarias, `lint`, `typecheck`, `format:check`, `next build` y build de OpenNext comprobadas. E2E de Playwright todavía pendiente de ejecutar con Chromium instalado.
+- **Despliegue de base de datos:** la migración inicial consolidada `0000` solo se debe aplicar a una base nueva. Antes del primer despliegue hay que confirmar que el destino no contiene un esquema anterior; si contiene datos que preservar, se requiere una migración incremental y un procedimiento de restauración probado.
 
 ## 11. Definición de hecho (DoD)
 - Todos los AC de la tarea pasan en CI.

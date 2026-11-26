@@ -1,4 +1,4 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { AppError } from "@/lib/errors";
 import * as authSchema from "@/lib/db/auth-schema";
 import type { PlayerProfileInput } from "../domain/profile-input";
@@ -84,6 +84,16 @@ export async function getOwnPlayerProfile(userId: string): Promise<PlayerProfile
   const database = await createPlayersDatabase();
   await ensurePlayerExists(database, userId);
   return loadProfile(database, userId);
+}
+
+export async function isAccountDeletionPending(userId: string): Promise<boolean> {
+  const database = await createPlayersDatabase();
+  const [user] = await database
+    .select({ id: authSchema.user.id })
+    .from(authSchema.user)
+    .where(and(eq(authSchema.user.id, userId), isNotNull(authSchema.user.deletedAt)))
+    .limit(1);
+  return user !== undefined;
 }
 
 export async function getPublicPlayerProfile(username: string): Promise<PlayerProfile | null> {

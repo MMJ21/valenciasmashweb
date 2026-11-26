@@ -5,6 +5,7 @@ export {
   ensurePlayerForUser,
   getOwnPlayerProfile,
   getPublicPlayerProfile,
+  isAccountDeletionPending,
   updatePlayerProfile,
 } from "./application/profile";
 export type { PlayerProfile, PlayerProfileCharacter } from "./application/profile";
