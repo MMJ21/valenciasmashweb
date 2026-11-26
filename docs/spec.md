@@ -105,12 +105,14 @@ app_config       (key PK, value jsonb)
 - **REQ-200** Registro e inicio de sesión con username y contraseña (mín. 12, máx. 128 caracteres). El registro requiere un email único, confirmación de mayoría de edad y aceptación de términos; la sesión no se habilita hasta verificar el email. Al crear la cuenta se crea un `player` vacío.
 - **REQ-201** El usuario DEBE poder editar: Nick (almacenado como `gamertag`), nombre, apellidos, Twitter, Twitch, foto, personaje principal y personaje secundario opcional, y bio (máx. 500 caracteres). El principal y el secundario se eligen en desplegables con icono y nombre; el secundario no puede duplicar al principal.
 - **REQ-202** La bio DEBE sanearse (texto plano o Markdown limitado, sin HTML).
-- **REQ-203** Foto: JPEG/PNG/WebP, máx. 2 MB [CFG], redimensionada y recodificada en servidor a WebP 512×512, subida a R2 con subida directa firmada o por el servidor.
+- **REQ-203** Foto: JPEG/PNG/WebP, máx. 2 MiB [CFG]; el servidor valida la firma del formato, recodifica con Cloudflare Images a WebP 512×512 (recorte `cover`) y guarda el resultado en un bucket privado R2. La subida pasa por el endpoint autenticado; no se conserva el original. La URL pública se sirve mediante el Worker.
 - **REQ-204** La ficha pública `/players/[username]` muestra: Nick, nombre y apellidos, redes sociales, personajes, ranking actual, historial de torneos, estadísticas de point matches y títulos.
 - **REQ-205** El usuario DEBE poder eliminar su cuenta. Se anonimiza el `player` (se conserva el historial de torneos).
 - **REQ-206** El sistema DEBE enviar enlaces de verificación y recuperación de contraseña por correo. En producción usa Resend; en desarrollo local los enlaces se muestran en la consola.
 - **AC-200** Un usuario sin sesión no puede editar ninguna ficha (403).
 - **AC-201** Un archivo que no sea imagen o supere el límite se rechaza con mensaje claro.
+- **AC-202** Una foto válida se sirve como WebP de 512×512; al reemplazarla, el perfil muestra la nueva URL versionada y no se expone el objeto original.
+- **AC-203** La baja elimina la foto de R2 antes de anonimizar el perfil; si falla el borrado, la baja no se completa.
 
 ### 6.3 Vinculación con start.gg
 - **REQ-210** Método principal: OAuth2 de start.gg (scope `user.identity`). Tras el callback se consulta `currentUser { id slug player { id gamerTag } }`.
@@ -285,12 +287,12 @@ Cada tarea se cierra cuando sus AC pasan.
 
 ### Estado de implementación (26 nov 2026)
 - **Fase 0:** Next.js, OpenNext, Neon/Drizzle, PGlite local, migraciones y `lib/season` implementados. Worker publicado en `https://valenciasmash.com`; healthcheck y landing responden correctamente. `workers.dev` y Preview URLs están desactivados. La migración `0001` se aplicó a Neon.
-- **Fase 1 implementada parcialmente:** landing con logo/paleta; Better Auth con username, contraseña, verificación y recuperación por email; adaptador Resend en producción y enlaces por consola en desarrollo; alta con rol `user` y promoción manual del admin inicial; aceptación de edad/términos; ficha editable y pública, redes sociales, borrado/anonimización y selector principal/secundario; catálogo estático de 86 entradas.
+- **Fase 1 implementada parcialmente:** landing con logo/paleta; Better Auth con username, contraseña, verificación y recuperación por email; adaptador Resend en producción y enlaces por consola en desarrollo; alta con rol `user` y promoción manual del admin inicial; aceptación de edad/términos; ficha editable y pública, redes sociales, borrado/anonimización y selector principal/secundario; catálogo estático de 86 entradas. La subida de fotos usa Images y R2, pendiente habilitar el binding y el bucket en Cloudflare y validar el flujo remoto.
 - El catálogo muestra un icono del primer color disponible por personaje. Se mantienen los iconos de variantes originales en `public/Stock Icons/`; los 86 iconos de ficha están normalizados en `public/characters/`.
 - La migración `0003` elimina `players.display_name`; la ficha usa `first_name` y `last_name`.
 - La landing muestra un top 5 provisional mantenido en `modules/ranking/domain/current-ranking.ts` con los datos proporcionados por la comunidad (MVL/Diddy Kong, Nub/Joker, Samu/Roy, Sir William/Palutena y Raptor/Meta Knight, con sus variaciones). Aún no se calcula desde `ratings_snapshot`; eso corresponde a la Fase 3.
 - **Despliegue verificado:** registro, verificación por correo a otro destinatario, inicio de sesión, edición/guardado de ficha y baja de cuenta se probaron con Neon y Resend en el Worker real. PBKDF2 con 100 000 iteraciones funciona en el runtime desplegado; sigue pendiente medir el tiempo de CPU.
-- **Pendiente:** subida/recodificación de fotos WebP a R2 (T-1.3), datos reales de torneos, cálculo persistente del ranking y revisión legal final de los términos. El remitente de Resend `send.valenciasmash.com` está verificado y probado; la política de privacidad y los términos deben revisarse antes de abrir el registro al público.
+- **Pendiente:** validar en Cloudflare Images/R2 la subida, recodificación y borrado de fotos (T-1.3; ADR-0016), datos reales de torneos, cálculo persistente del ranking y revisión legal final de los términos. El remitente de Resend `send.valenciasmash.com` está verificado y probado; la política de privacidad y los términos deben revisarse antes de abrir el registro al público.
 - **Verificación local:** 19 pruebas unitarias, `lint`, `typecheck`, `format:check` y `next build` comprobadas. E2E de Playwright todavía pendiente de ejecutar con Chromium instalado.
 - **Despliegue de base de datos:** la migración inicial consolidada `0000` solo se debe aplicar a una base nueva. La migración incremental `0001` añadió `rateLimit.id` conservando los contadores; las futuras modificaciones deben preservar datos y vínculos existentes.
 

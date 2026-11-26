@@ -6,8 +6,16 @@ export {
   getOwnPlayerProfile,
   getPublicPlayerProfile,
   isAccountDeletionPending,
+  updatePlayerAvatar,
   updatePlayerProfile,
 } from "./application/profile";
 export type { PlayerProfile, PlayerProfileCharacter } from "./application/profile";
 export { playerProfileInputSchema } from "./domain/profile-input";
 export type { PlayerProfileInput } from "./domain/profile-input";
+export {
+  deleteAvatar,
+  getAvatar,
+  isSupportedImage,
+  MAX_AVATAR_BYTES,
+  saveAvatar,
+} from "./infra/avatar-storage";

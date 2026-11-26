@@ -29,6 +29,7 @@ Este directorio registra las decisiones de arquitectura de ValenciaSmash mediant
 | [0013](0013-promocion-manual-del-administrador.md)          | Promoción manual del administrador inicial                    | Sustituido           |
 | [0014](0014-restablecimiento-antes-de-promocion-admin.md)   | Recuperar credenciales antes de promover al admin inicial     | Sustituido           |
 | [0015](0015-prueba-titularidad-antes-de-promocion-admin.md) | Prueba de titularidad antes de promover al admin              | Aceptado             |
+| [0016](0016-fotos-de-perfil-con-images-y-r2.md)             | Recodificar fotos con Images y almacenarlas en R2             | Aceptado con reserva |
 
 ## Plantilla
 

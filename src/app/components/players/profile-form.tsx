@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import type { PlayerProfile } from "@/modules/players";
 import { CharacterDropdown } from "./character-dropdown";
 
@@ -15,6 +16,7 @@ export function ProfileForm({ initialProfile }: ProfileFormProps): React.JSX.Ele
   const [twitter, setTwitter] = useState(initialProfile.twitter ?? "");
   const [twitch, setTwitch] = useState(initialProfile.twitch ?? "");
   const [bio, setBio] = useState(initialProfile.bio ?? "");
+  const [avatarUrl, setAvatarUrl] = useState(initialProfile.avatarUrl);
   const [primaryCharacterId, setPrimaryCharacterId] = useState<string | null>(
     initialProfile.characters.find(({ isMain }) => isMain)?.id ?? null,
   );
@@ -24,6 +26,48 @@ export function ProfileForm({ initialProfile }: ProfileFormProps): React.JSX.Ele
   const [message, setMessage] = useState<string>();
   const [saved, setSaved] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function handleAvatarChange(event: React.ChangeEvent<HTMLInputElement>): Promise<void> {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (file === undefined) return;
+    setMessage(undefined);
+    setSaved(false);
+    setIsSubmitting(true);
+    try {
+      const response = await fetch("/api/players/me", {
+        method: "POST",
+        headers: { "Content-Type": "application/octet-stream" },
+        body: file,
+      });
+      const result: unknown = await response.json();
+      if (!response.ok) {
+        const serverMessage =
+          typeof result === "object" &&
+          result !== null &&
+          "message" in result &&
+          typeof result.message === "string"
+            ? result.message
+            : "No se pudo guardar la foto.";
+        setMessage(serverMessage);
+        return;
+      }
+      if (
+        typeof result === "object" &&
+        result !== null &&
+        "avatarUrl" in result &&
+        typeof result.avatarUrl === "string"
+      ) {
+        setAvatarUrl(result.avatarUrl);
+        setSaved(true);
+      }
+    } catch {
+      setMessage("No se pudo conectar con el servidor. Inténtalo de nuevo.");
+    } finally {
+      setIsSubmitting(false);
+      input.value = "";
+    }
+  }
 
   function updatePrimaryCharacter(characterId: string | null): void {
     setPrimaryCharacterId(characterId);
@@ -71,6 +115,18 @@ export function ProfileForm({ initialProfile }: ProfileFormProps): React.JSX.Ele
 
   return (
     <form className="profile-form" onSubmit={handleSubmit}>
+      <label className="form-field">
+        Foto de perfil (JPEG, PNG o WebP; máximo 2 MB)
+        {avatarUrl === null ? null : (
+          <Image alt="" height={96} src={avatarUrl} unoptimized width={96} />
+        )}
+        <input
+          accept="image/jpeg,image/png,image/webp"
+          disabled={isSubmitting}
+          onChange={handleAvatarChange}
+          type="file"
+        />
+      </label>
       <div className="profile-form-fields">
         <label className="form-field">
           Nick

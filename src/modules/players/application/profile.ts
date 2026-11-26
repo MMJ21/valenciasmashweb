@@ -246,3 +246,47 @@ export async function updatePlayerProfile(input: UpdatePlayerProfileInput): Prom
     }
   });
 }
+
+export async function updatePlayerAvatar(userId: string, avatarUrl: string): Promise<void> {
+  const database = await createPlayersDatabase();
+  const activeUser = and(eq(authSchema.user.id, userId), isNull(authSchema.user.deletedAt));
+  if ("batch" in database) {
+    await runNeonProfileBatch(userId, () =>
+      database.batch([
+        database.execute(sql`
+          SELECT 1 / COUNT(*) FROM ${authSchema.user}
+          WHERE ${authSchema.user.id} = ${userId} AND ${authSchema.user.deletedAt} IS NULL
+        `),
+        database
+          .update(schema.players)
+          .set({ avatarUrl })
+          .where(
+            and(
+              eq(schema.players.userId, userId),
+              sql`EXISTS (SELECT 1 FROM ${authSchema.user} WHERE ${authSchema.user.id} = ${userId} AND ${authSchema.user.deletedAt} IS NULL)`,
+            ),
+          ),
+      ]),
+    );
+    return;
+  }
+
+  await database.transaction(async (transaction) => {
+    const [owner] = await transaction
+      .select({ id: authSchema.user.id })
+      .from(authSchema.user)
+      .where(activeUser)
+      .for("update")
+      .limit(1);
+    if (owner === undefined) {
+      throw new AppError(
+        "La cuenta ya no está activa o se encuentra en proceso de eliminación.",
+        "CONFLICT",
+      );
+    }
+    await transaction
+      .update(schema.players)
+      .set({ avatarUrl })
+      .where(eq(schema.players.userId, userId));
+  });
+}

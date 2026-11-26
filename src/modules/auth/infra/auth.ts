@@ -11,6 +11,7 @@ import * as playerSchema from "@/modules/players/infra/schema";
 import { resolveInitialRole } from "../domain/roles";
 import { sendTransactionalEmail } from "./email-sender";
 import { hashPassword, verifyPasswordHash } from "./password-hasher";
+import { deleteAvatar } from "@/modules/players/infra/avatar-storage";
 
 const schema = { ...authSchema, ...playerSchema };
 const localSecret = "valenciasmash-local-auth-secret-only-not-for-production";
@@ -34,6 +35,7 @@ const anonymizedPlayerFields = {
 };
 
 async function prepareAccountDeletion(userId: string): Promise<void> {
+  await deleteAvatar(userId);
   const database = await createPlayersDatabase();
   const lockUser = database.execute(sql`
     SELECT 1 / COUNT(*)
