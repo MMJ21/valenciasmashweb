@@ -57,16 +57,18 @@ El proyecto configura pnpm con `node-linker=hoisted` para que el trazado standal
 | `pnpm test:e2e`    | Smoke tests de Playwright           |
 | `pnpm db:generate` | Generar migraciones Drizzle         |
 | `pnpm preview`     | Compilar y previsualizar en Workers |
-| `pnpm deploy`      | Compilar y desplegar en Cloudflare  |
+| `pnpm run deploy`  | Compilar y desplegar en Cloudflare  |
 
 ## Auth y perfiles
 
 - Better Auth usa username, correo y contraseña con verificación obligatoria. Los identificadores son UUID y `user` es la única tabla de usuarios.
 - El perfil se edita en `/account` con Nick, nombre y apellidos, Twitter, Twitch, biografía y desplegables de personaje principal/secundario; se consulta en `/players/<username>`.
 - Los 86 iconos usados por la app están en `public/characters/`. El archivo completo de variantes `public/Stock Icons/` se ignora en Git y se conserva solo localmente. Para regenerar los iconos con `pnpm assets:characters`, descarga la carpeta de origen y colócala localmente en esa ruta.
-- La subida de fotos a R2 aún no está conectada; `wrangler.jsonc` declara el bucket `valenciasmash`, que tendrás que crear para despliegues.
+- La subida de fotos a R2 aún no está conectada ni hay un binding de R2 en el despliegue; se añadirá junto con T-1.3.
 - No se guardan secretos en el repositorio. Usa secretos de Cloudflare para despliegues.
-- La compatibilidad real de OpenNext con Workers y los límites del nivel gratuito se validan en el primer despliegue.
+- Producción: [valenciasmash.com](https://valenciasmash.com). Los accesos `workers.dev` y Preview URLs están desactivados.
+- El remitente transaccional está verificado en `send.valenciasmash.com` y se ha probado enviando a un correo ajeno a la cuenta de Resend.
+- OpenNext se ha desplegado en Workers; registro, correo de verificación, edición de perfil y baja se han probado con Neon.
 
 ## Assets y derechos de terceros
 
