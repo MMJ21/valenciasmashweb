@@ -1,6 +1,6 @@
 # ADR-0013: Promoción manual del administrador inicial
 
-- **Estado:** Aceptado
+- **Estado:** Sustituido para el procedimiento operativo por [ADR-0015](0015-prueba-titularidad-antes-de-promocion-admin.md); consultar ese ADR para los requisitos vigentes
 - **Fecha:** 2026-11-26
 - **Requisitos relacionados:** REQ-001, REQ-002, SEC-001
 - **Sustituye a:** asignación de rol admin por `ADMIN_EMAILS` durante el alta, descrita en ADR-0004

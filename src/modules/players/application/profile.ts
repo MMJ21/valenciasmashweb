@@ -3,6 +3,7 @@ import { AppError } from "@/lib/errors";
 import * as authSchema from "@/lib/db/auth-schema";
 import type { PlayerProfileInput } from "../domain/profile-input";
 import { createPlayersDatabase } from "../infra/database";
+import { isPostgresDivisionByZero } from "../infra/postgres-errors";
 import * as schema from "../infra/schema";
 
 type PlayerDatabase = Awaited<ReturnType<typeof createPlayersDatabase>>;
@@ -96,6 +97,27 @@ export async function isAccountDeletionPending(userId: string): Promise<boolean>
   return user !== undefined;
 }
 
+async function runNeonProfileBatch<T>(userId: string, operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error: unknown) {
+    if (!isPostgresDivisionByZero(error)) {
+      throw error;
+    }
+
+    try {
+      if (await isAccountDeletionPending(userId)) {
+        throw new AppError("La cuenta está en proceso de eliminación.", "CONFLICT");
+      }
+    } catch (verificationError: unknown) {
+      if (verificationError instanceof AppError) {
+        throw verificationError;
+      }
+    }
+    throw error;
+  }
+}
+
 export async function getPublicPlayerProfile(username: string): Promise<PlayerProfile | null> {
   const database = await createPlayersDatabase();
   const [record] = await database
@@ -161,23 +183,27 @@ export async function updatePlayerProfile(input: UpdatePlayerProfileInput): Prom
 
     // Neon HTTP batches run transactionally; the guard aborts before character writes on a race.
     if (input.characters.length === 0) {
-      await database.batch([lockActiveUser, updatePlayer, assertOwnership, deleteCharacters]);
+      await runNeonProfileBatch(input.userId, () =>
+        database.batch([lockActiveUser, updatePlayer, assertOwnership, deleteCharacters]),
+      );
       return;
     }
 
-    await database.batch([
-      lockActiveUser,
-      updatePlayer,
-      assertOwnership,
-      deleteCharacters,
-      database.insert(schema.playerCharacters).values(
-        input.characters.map((character) => ({
-          playerId: player.id,
-          characterId: character.id,
-          isMain: character.isMain,
-        })),
-      ),
-    ]);
+    await runNeonProfileBatch(input.userId, () =>
+      database.batch([
+        lockActiveUser,
+        updatePlayer,
+        assertOwnership,
+        deleteCharacters,
+        database.insert(schema.playerCharacters).values(
+          input.characters.map((character) => ({
+            playerId: player.id,
+            characterId: character.id,
+            isMain: character.isMain,
+          })),
+        ),
+      ]),
+    );
     return;
   }
 
