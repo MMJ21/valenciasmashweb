@@ -30,6 +30,11 @@ async function ensurePlayerExists(database: PlayerDatabase, userId: string): Pro
   await database.insert(schema.players).values({ userId }).onConflictDoNothing();
 }
 
+export async function ensurePlayerForUser(userId: string): Promise<void> {
+  const database = await createPlayersDatabase();
+  await ensurePlayerExists(database, userId);
+}
+
 async function loadProfile(
   database: PlayerDatabase,
   userId: string,

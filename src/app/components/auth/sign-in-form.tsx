@@ -25,7 +25,7 @@ export function SignInForm(): React.JSX.Element {
         setMessage(
           result.error.status === 403
             ? "Verifica tu correo antes de iniciar sesión. Puedes solicitar otro enlace desde aquí."
-            : (result.error.message ?? "Usuario o contraseña incorrectos."),
+            : "No se pudo iniciar sesión. Revisa tus datos e inténtalo de nuevo.",
         );
         return;
       }

@@ -127,6 +127,7 @@ export function CharacterDropdown({
             aria-selected={selectedId === null}
             className="character-dropdown-option character-dropdown-empty"
             onClick={() => choose(null)}
+            onFocus={() => setActiveOptionIndex(0)}
             role="option"
             ref={(element) => {
               optionRefs.current[0] = element;
@@ -141,6 +142,7 @@ export function CharacterDropdown({
               className="character-dropdown-option"
               key={character.id}
               onClick={() => choose(character.id)}
+              onFocus={() => setActiveOptionIndex(index + 1)}
               role="option"
               ref={(element) => {
                 optionRefs.current[index + 1] = element;

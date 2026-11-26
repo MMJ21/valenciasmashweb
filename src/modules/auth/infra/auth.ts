@@ -5,6 +5,7 @@ import { username } from "better-auth/plugins";
 import { eq, sql } from "drizzle-orm";
 import { env } from "@/lib/config/env";
 import * as authSchema from "@/lib/db/auth-schema";
+import { ensurePlayerForUser } from "@/modules/players";
 import { createPlayersDatabase } from "@/modules/players/infra/database";
 import * as playerSchema from "@/modules/players/infra/schema";
 import { resolveInitialRole } from "../domain/roles";
@@ -164,11 +165,14 @@ function createAuth() {
               };
             },
             after: async (newUser) => {
-              const db = await createPlayersDatabase();
-              await db
-                .insert(playerSchema.players)
-                .values({ userId: newUser.id })
-                .onConflictDoNothing();
+              await ensurePlayerForUser(newUser.id);
+            },
+          },
+        },
+        session: {
+          create: {
+            after: async (newSession) => {
+              await ensurePlayerForUser(newSession.userId);
             },
           },
         },

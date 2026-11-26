@@ -2,6 +2,7 @@ export { listPlayersForDevelopment } from "./application/list-players";
 export { CHARACTERS } from "./domain/characters";
 export type { Character } from "./domain/characters";
 export {
+  ensurePlayerForUser,
   getOwnPlayerProfile,
   getPublicPlayerProfile,
   updatePlayerProfile,
