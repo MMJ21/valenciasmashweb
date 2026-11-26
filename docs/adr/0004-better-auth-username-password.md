@@ -1,6 +1,6 @@
 # ADR-0004: Better Auth con username, contraseña y verificación de correo
 
-- **Estado:** Aceptado
+- **Estado:** Sustituido por [ADR-0013](0013-promocion-manual-del-administrador.md) únicamente en la decisión de asignación del rol admin; el resto de esta decisión sigue vigente
 - **Fecha:** 2026-11-24 (documentado)
 - **Requisitos relacionados:** REQ-001, REQ-002, REQ-200, REQ-205, SEC-003, SEC-005
 - **Sustituye a:** propuesta inicial de Discord OAuth (no implementada)

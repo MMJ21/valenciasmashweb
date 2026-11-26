@@ -38,9 +38,9 @@ Al registrarte en local, el enlace de verificación se imprime en la consola de 
 - `pnpm db:reset` elimina **solo** `.data/pglite/` y la vuelve a crear con la migración y las semillas.
 - El historial Drizzle se consolidó en la migración inicial `0000` antes del primer despliegue. Esa baseline es solo para bases nuevas y no actualiza de forma segura esquemas previos; si tu PGlite conserva el historial anterior, ejecuta `pnpm db:reset`. Desde el primer despliegue real, cualquier cambio de esquema debe publicarse como migración incremental, preservando los datos y vínculos existentes.
 - Para usar Neon en desarrollo, define `DATABASE_URL` en `.env.local`; esa URL tiene prioridad sobre PGlite.
-- Las nuevas cuentas reciben rol `admin` si su correo aparece en `ADMIN_EMAILS` (separados por comas); las demás empiezan como `user`.
+- Todas las cuentas nuevas empiezan como `user`. Para promover manualmente una cuenta a admin, verifica primero su correo y ejecuta `pnpm admin:promote correo@ejemplo.com`. Sin `DATABASE_URL`, el comando usa la base PGlite local; para Neon, define `DATABASE_URL` en el entorno de la terminal antes de ejecutarlo. Comprueba cuidadosamente la base destino antes de usarlo.
 - Sin `RESEND_API_KEY` y `EMAIL_FROM`, los correos de verificación y recuperación se muestran en la consola local. En producción ambos secretos son obligatorios.
-- Para producción configura `BETTER_AUTH_SECRET` (32+ caracteres aleatorios), `BETTER_AUTH_URL`, `RESEND_API_KEY`, `EMAIL_FROM` y opcionalmente `ADMIN_EMAILS` en los secretos del entorno; no los incluyas en Git.
+- Para producción configura `BETTER_AUTH_SECRET` (32+ caracteres aleatorios), `BETTER_AUTH_URL`, `RESEND_API_KEY` y `EMAIL_FROM` en los secretos del entorno; no los incluyas en Git.
 - La ruta de jugadores de depuración no implementa autenticación porque solo está habilitada en `NODE_ENV=development`; no debe usarse para servir datos de una cuenta real.
 
 PGlite comparte el dialecto PostgreSQL y el historial de migraciones, pero no sustituye una prueba de concurrencia real en Neon: el matchmaking y los bloqueos se validarán contra PostgreSQL cuando se implemente esa funcionalidad.

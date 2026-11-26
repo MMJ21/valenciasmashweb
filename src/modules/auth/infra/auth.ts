@@ -14,12 +14,6 @@ import { hashPassword, verifyPasswordHash } from "./password-hasher";
 
 const schema = { ...authSchema, ...playerSchema };
 const localSecret = "valenciasmash-local-auth-secret-only-not-for-production";
-const adminEmails = new Set(
-  env.ADMIN_EMAILS.split(",")
-    .map((email) => email.trim().toLocaleLowerCase("en-US"))
-    .filter((email) => email.length > 0),
-);
-
 export class AuthConfigurationError extends Error {
   constructor() {
     super("La autenticación no está configurada en el servidor.");
@@ -177,7 +171,7 @@ function createAuth() {
               return {
                 data: {
                   ...newUser,
-                  role: resolveInitialRole(newUser.email, adminEmails),
+                  role: resolveInitialRole(),
                 },
               };
             },

@@ -23,6 +23,7 @@
     "db:studio": "drizzle-kit studio",
     "db:local": "tsx scripts/local-db.ts",
     "db:reset": "tsx scripts/local-db.ts --reset",
+    "admin:promote": "tsx scripts/promote-admin.ts",
     "assets:characters": "tsx scripts/prepare-character-icons.ts",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy"

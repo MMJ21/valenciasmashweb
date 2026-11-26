@@ -5,6 +5,7 @@ import {
   updatePlayerProfile,
 } from "@/modules/players";
 import { getAuth } from "@/modules/auth";
+import { AppError } from "@/lib/errors";
 
 export async function GET(request: Request): Promise<Response> {
   const auth = await getAuth();
@@ -51,6 +52,13 @@ export async function PATCH(request: Request): Promise<Response> {
     );
   }
 
-  await updatePlayerProfile({ userId: session.user.id, ...parsed.data });
+  try {
+    await updatePlayerProfile({ userId: session.user.id, ...parsed.data });
+  } catch (error: unknown) {
+    if (error instanceof AppError && error.code === "CONFLICT") {
+      return Response.json({ message: error.message }, { status: 409 });
+    }
+    throw error;
+  }
   return Response.json({ status: "ok" });
 }

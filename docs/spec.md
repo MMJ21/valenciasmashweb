@@ -51,7 +51,7 @@ Restricciones:
 | `admin` | Lo de `importer` + gestionar roles, resolver disputas, verificar vínculos, moderar |
 
 - **REQ-001** Los permisos DEBEN comprobarse en el servidor en cada acción, nunca solo en la UI.
-- **REQ-002** El primer admin se asigna por coincidencia de correo con `ADMIN_EMAILS` al registrarse.
+- **REQ-002** Las cuentas nuevas empiezan como `user`. El primer administrador se promueve manualmente mediante un script de operador, solo si su correo está verificado y la cuenta sigue activa.
 
 ## 5. Modelo de datos
 
@@ -252,7 +252,7 @@ proposed -> accepted -> reported -> confirmed
 ## 8. Configuración (`app_config`, editable por admin)
 `pm.max_wager=1000`, `pm.mm_wager=100`, `pm.max_planned_per_day=5`, `pm.proposal_ttl_h=48`, `pm.report_ttl_d=7`, `pm.min_sets_duelist=5`, `pm.mm_queue_ttl_h=24`, `pm.mm_repeat_per_week=1`, `elo.initial=1000`, `elo.k=32`, `ranking.active_algorithm=elo`, `ranking.min_tournaments=1`.
 
-Configuración de autenticación/cuenta: `ADMIN_EMAILS` es la lista separada por comas de correos que reciben `admin` al registrarse; el resto empieza como `user`. El rate limit de Better Auth es persistente en BD en producción. La ficha admite dos personajes como máximo (principal y secundario opcional). Las contraseñas nuevas usan PBKDF2-HMAC-SHA-256 con 100 000 iteraciones, valor conservador mientras se valida el límite efectivo y la CPU del Worker desplegado (NFR-004, ADR-0012).
+Configuración de autenticación/cuenta: todas las cuentas nuevas empiezan como `user`; un operador promueve manualmente al administrador inicial con `pnpm admin:promote <correo>`, que exige correo verificado y cuenta activa. El rate limit de Better Auth es persistente en BD en producción. La ficha admite dos personajes como máximo (principal y secundario opcional). Las contraseñas nuevas usan PBKDF2-HMAC-SHA-256 con 100 000 iteraciones, valor conservador mientras se valida el límite efectivo y la CPU del Worker desplegado (NFR-004, ADR-0012).
 
 ## 9. Estructura del proyecto
 ```
@@ -285,7 +285,7 @@ Cada tarea se cierra cuando sus AC pasan.
 
 ### Estado de implementación (24 nov 2026)
 - **Fase 0:** Next.js, OpenNext, Neon/Drizzle, PGlite local, migraciones y `lib/season` implementados. Builds de Next.js y OpenNext comprobadas localmente; el despliegue real en Cloudflare/Neon está pendiente.
-- **Fase 1 implementada parcialmente:** landing con logo/paleta; Better Auth con username, contraseña, verificación y recuperación por email; adaptador Resend en producción y enlaces por consola en desarrollo; roles por `ADMIN_EMAILS`; aceptación de edad/términos; ficha editable y pública, redes sociales, borrado/anonimización y selector principal/secundario; catálogo estático de 86 entradas.
+- **Fase 1 implementada parcialmente:** landing con logo/paleta; Better Auth con username, contraseña, verificación y recuperación por email; adaptador Resend en producción y enlaces por consola en desarrollo; alta con rol `user` y promoción manual del admin inicial; aceptación de edad/términos; ficha editable y pública, redes sociales, borrado/anonimización y selector principal/secundario; catálogo estático de 86 entradas.
 - El catálogo muestra un icono del primer color disponible por personaje. Se mantienen los iconos de variantes originales en `public/Stock Icons/`; los 86 iconos de ficha están normalizados en `public/characters/`.
 - La migración `0003` elimina `players.display_name`; la ficha usa `first_name` y `last_name`.
 - La landing muestra un top 5 provisional mantenido en `modules/ranking/domain/current-ranking.ts` con los datos proporcionados por la comunidad (MVL/Diddy Kong, Nub/Joker, Samu/Roy, Sir William/Palutena y Raptor/Meta Knight, con sus variaciones). Aún no se calcula desde `ratings_snapshot`; eso corresponde a la Fase 3.
