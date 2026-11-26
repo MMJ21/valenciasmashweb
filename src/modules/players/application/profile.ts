@@ -1,4 +1,4 @@
-import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { AppError } from "@/lib/errors";
 import * as authSchema from "@/lib/db/auth-schema";
 import type { PlayerProfileInput } from "../domain/profile-input";
@@ -90,11 +90,11 @@ export async function getOwnPlayerProfile(userId: string): Promise<PlayerProfile
 export async function isAccountDeletionPending(userId: string): Promise<boolean> {
   const database = await createPlayersDatabase();
   const [user] = await database
-    .select({ id: authSchema.user.id })
+    .select({ id: authSchema.user.id, deletedAt: authSchema.user.deletedAt })
     .from(authSchema.user)
-    .where(and(eq(authSchema.user.id, userId), isNotNull(authSchema.user.deletedAt)))
+    .where(eq(authSchema.user.id, userId))
     .limit(1);
-  return user !== undefined;
+  return user === undefined || user.deletedAt !== null;
 }
 
 async function runNeonProfileBatch<T>(userId: string, operation: () => Promise<T>): Promise<T> {
@@ -107,7 +107,10 @@ async function runNeonProfileBatch<T>(userId: string, operation: () => Promise<T
 
     try {
       if (await isAccountDeletionPending(userId)) {
-        throw new AppError("La cuenta está en proceso de eliminación.", "CONFLICT");
+        throw new AppError(
+          "La cuenta ya no está activa o se encuentra en proceso de eliminación.",
+          "CONFLICT",
+        );
       }
     } catch (verificationError: unknown) {
       if (verificationError instanceof AppError) {
@@ -215,7 +218,10 @@ export async function updatePlayerProfile(input: UpdatePlayerProfileInput): Prom
       .for("update")
       .limit(1);
     if (owner === undefined) {
-      throw new AppError("La cuenta está en proceso de eliminación.", "CONFLICT");
+      throw new AppError(
+        "La cuenta ya no está activa o se encuentra en proceso de eliminación.",
+        "CONFLICT",
+      );
     }
 
     const updatedPlayers = await transaction

@@ -18,7 +18,10 @@ export async function GET(request: Request): Promise<Response> {
   if (profile === null) {
     if (await isAccountDeletionPending(session.user.id)) {
       return Response.json(
-        { message: "La cuenta está en proceso de eliminación. No se puede consultar la ficha." },
+        {
+          message:
+            "La cuenta ya no está activa o se encuentra en proceso de eliminación. No se puede consultar la ficha.",
+        },
         { status: 409 },
       );
     }
