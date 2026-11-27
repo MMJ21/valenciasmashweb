@@ -18,6 +18,20 @@ async function findVerificationUrl(email: string): Promise<string | null> {
   }
 }
 
+async function countAvatarUploadReservations(): Promise<number> {
+  try {
+    const content = await readFile(
+      resolve(process.cwd(), ".data", "playwright-server.log"),
+      "utf8",
+    );
+    return content
+      .split(/\r?\n/)
+      .filter((line) => line.includes("[E2E avatar] reservation acquired")).length;
+  } catch {
+    return 0;
+  }
+}
+
 async function uploadAvatar(page: Page): Promise<string> {
   const uploadResponsePromise = page.waitForResponse(
     (response) =>
@@ -120,10 +134,23 @@ test("REQ-200, REQ-201, REQ-205: registro, verificación, edición y baja", asyn
   expect(profileResponse.ok(), await profileResponse.text()).toBe(true);
   await expect(page.getByRole("status")).toContainText("Ficha guardada");
 
+  const invalidImageResponsePromise = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/players/me") && response.request().method() === "POST",
+  );
+  await page.getByLabel(/Foto de perfil/).setInputFiles({
+    name: "malformed.png",
+    mimeType: "image/png",
+    buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+  });
+  const invalidImageResponse = await invalidImageResponsePromise;
+  expect(invalidImageResponse.status(), await invalidImageResponse.text()).toBe(400);
+
   const firstAvatarUrl = await uploadAvatar(page);
   const firstAvatarResponse = await page.request.get(firstAvatarUrl);
   expect(firstAvatarResponse.status()).toBe(200);
   expect(firstAvatarResponse.headers()["content-type"]).toContain("image/webp");
+  expect(firstAvatarResponse.headers()["cache-control"]).toContain("no-store");
   const firstAvatarBytes = await firstAvatarResponse.body();
   expect(firstAvatarBytes.toString("ascii", 0, 4)).toBe("RIFF");
   expect(firstAvatarBytes.toString("ascii", 8, 12)).toBe("WEBP");
@@ -144,6 +171,7 @@ test("REQ-200, REQ-201, REQ-205: registro, verificación, edición y baja", asyn
   const replacementAvatarResponse = await page.request.get(replacementAvatarUrl);
   expect(replacementAvatarResponse.status()).toBe(200);
   expect(replacementAvatarResponse.headers()["content-type"]).toContain("image/webp");
+  await expect(avatarPreview).toHaveAttribute("src", replacementAvatarUrl);
   await expect
     .poll(() =>
       avatarPreview.evaluate((image) =>
@@ -168,6 +196,13 @@ test("REQ-200, REQ-201, REQ-205: registro, verificación, edición y baja", asyn
         version: "2026-11-26-v2",
       },
     },
+    sessions: expect.arrayContaining([
+      expect.objectContaining({
+        createdAt: expect.any(String),
+        expiresAt: expect.any(String),
+        userAgent: expect.any(String),
+      }),
+    ]),
     player: {
       gamertag,
       firstName: "Prueba",
@@ -185,7 +220,32 @@ test("REQ-200, REQ-201, REQ-205: registro, verificación, edición y baja", asyn
   await page.goto("/account");
   await page.getByLabel("Confirma tu contraseña para eliminar la cuenta").fill(password);
   page.once("dialog", (dialog) => dialog.accept());
+  const previousReservationCount = await countAvatarUploadReservations();
+  const inFlightAvatarResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/players/me") && response.request().method() === "POST",
+  );
+  await page.getByLabel(/Foto de perfil/).setInputFiles({
+    name: "mario.png",
+    mimeType: "image/png",
+    buffer: await readFile(resolve(process.cwd(), "public/characters/mario.png")),
+  });
+  const avatarUploadCompletion = inFlightAvatarResponse.then((response) => ({
+    response,
+    completedAt: Date.now(),
+  }));
+  await expect.poll(countAvatarUploadReservations).toBeGreaterThan(previousReservationCount);
+  const deleteResponsePromise = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/auth/delete-user") && response.request().method() === "POST",
+  );
   await page.getByRole("button", { name: "Eliminar mi cuenta" }).click();
+  const deleteResponse = await deleteResponsePromise;
+  const deletionCompletedAt = Date.now();
+  expect(deleteResponse.ok()).toBe(true);
+  const avatarUpload = await avatarUploadCompletion;
+  expect(avatarUpload.response.status()).toBe(409);
+  expect(avatarUpload.completedAt).toBeLessThan(deletionCompletedAt);
   await expect(page).toHaveURL("http://localhost:3100/");
 
   const publicProfileResponse = await page.goto(`/players/${username}`);

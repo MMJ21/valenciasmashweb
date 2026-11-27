@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { isSupportedImage, MAX_AVATAR_BYTES } from "@/modules/players/infra/avatar-storage";
+import {
+  isInvalidImageInputError,
+  isSupportedImage,
+  MAX_AVATAR_BYTES,
+} from "@/modules/players/infra/avatar-storage";
 
 describe("validación de firmas de foto", () => {
   it("reconoce JPEG, PNG y WebP por sus bytes y no por el nombre del archivo", () => {
@@ -17,5 +21,18 @@ describe("validación de firmas de foto", () => {
 
   it("mantiene el límite de entrada en 2 MiB", () => {
     expect(MAX_AVATAR_BYTES).toBe(2 * 1024 * 1024);
+  });
+
+  it("reconoce los errores específicos de entrada inválida de Images", () => {
+    expect(isInvalidImageInputError({ code: 9412 })).toBe(true);
+    expect(
+      isInvalidImageInputError({ code: 9523, message: "Input buffer has corrupt header" }),
+    ).toBe(true);
+    expect(isInvalidImageInputError({ code: 9432 })).toBe(false);
+    expect(isInvalidImageInputError({ code: 9523, message: "Image service timed out" })).toBe(
+      false,
+    );
+    expect(isInvalidImageInputError({ code: 9504 })).toBe(false);
+    expect(isInvalidImageInputError(new Error("Images service unavailable"))).toBe(false);
   });
 });

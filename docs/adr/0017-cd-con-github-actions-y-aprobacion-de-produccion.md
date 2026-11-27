@@ -1,6 +1,6 @@
 # ADR-0017: Despliegue continuo con GitHub Actions y aprobación de producción
 
-- **Estado:** Aceptado
+- **Estado:** Sustituido por ADR-0019
 - **Fecha:** 2026-11-26
 - **Requisitos relacionados:** NFR-001, NFR-002, NFR-003
 - **Sustituye a:** ninguno

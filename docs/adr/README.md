@@ -30,7 +30,9 @@ Este directorio registra las decisiones de arquitectura de ValenciaSmash mediant
 | [0014](0014-restablecimiento-antes-de-promocion-admin.md)        | Recuperar credenciales antes de promover al admin inicial     | Sustituido           |
 | [0015](0015-prueba-titularidad-antes-de-promocion-admin.md)      | Prueba de titularidad antes de promover al admin              | Aceptado             |
 | [0016](0016-fotos-de-perfil-con-images-y-r2.md)                  | Recodificar fotos con Images y almacenarlas en R2             | Aceptado con reserva |
-| [0017](0017-cd-con-github-actions-y-aprobacion-de-produccion.md) | Despliegue con GitHub Actions y aprobación de producción      | Aceptado             |
+| [0017](0017-cd-con-github-actions-y-aprobacion-de-produccion.md) | Despliegue con GitHub Actions y aprobación de producción      | Sustituido           |
+| [0018](0018-coordinar-baja-y-subida-de-avatar-con-reserva.md)    | Coordinar baja y subida de avatar mediante reserva en BD      | Aceptado             |
+| [0019](0019-evitar-despliegue-de-sha-obsoleto.md)                | Evitar despliegues de un SHA obsoleto de `master`             | Aceptado             |
 
 ## Plantilla
 

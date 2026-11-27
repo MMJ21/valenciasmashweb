@@ -13,7 +13,7 @@ export async function GET(_request: Request, context: AvatarRouteContext): Promi
   const headers = new Headers();
   object.writeHttpMetadata(headers);
   headers.set("Content-Type", "image/webp");
-  headers.set("Cache-Control", "public, max-age=31536000, immutable");
+  headers.set("Cache-Control", "private, no-store, max-age=0");
   headers.set("ETag", object.httpEtag);
   return new Response(object.body, { headers });
 }

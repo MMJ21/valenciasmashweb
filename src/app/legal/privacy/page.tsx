@@ -14,7 +14,8 @@ export default function PrivacyPage(): React.JSX.Element {
         apellidos, redes sociales, biografía, foto y personajes). La ficha puede mostrarse
         públicamente en el sitio. La fecha y versión de los términos aceptados se registran para
         documentar la aceptación; las cuentas creadas antes de este registro pueden no tener esos
-        datos históricos.
+        datos históricos. La exportación JSON de la cuenta incluye los metadatos disponibles de sus
+        sesiones, pero no los tokens de sesión.
       </p>
       <p>
         Estos datos se utilizan para crear y proteger cuentas, prestar las funciones de la

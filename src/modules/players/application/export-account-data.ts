@@ -22,6 +22,13 @@ export interface AccountDataExport {
       readonly version: string | null;
     };
   };
+  readonly sessions: readonly {
+    readonly createdAt: string;
+    readonly updatedAt: string;
+    readonly expiresAt: string;
+    readonly ipAddress: string | null;
+    readonly userAgent: string | null;
+  }[];
   readonly player: {
     readonly createdAt: string;
     readonly startggPlayerId: string | null;
@@ -71,6 +78,18 @@ export async function exportAccountData(
     .limit(1);
 
   if (user === undefined) return null;
+
+  const sessions = await database
+    .select({
+      createdAt: authSchema.session.createdAt,
+      updatedAt: authSchema.session.updatedAt,
+      expiresAt: authSchema.session.expiresAt,
+      ipAddress: authSchema.session.ipAddress,
+      userAgent: authSchema.session.userAgent,
+    })
+    .from(authSchema.session)
+    .where(eq(authSchema.session.userId, userId))
+    .orderBy(asc(authSchema.session.createdAt));
 
   const [player] = await database
     .select({
@@ -131,6 +150,13 @@ export async function exportAccountData(
         version: user.termsVersion,
       },
     },
+    sessions: sessions.map((session) => ({
+      createdAt: session.createdAt.toISOString(),
+      updatedAt: session.updatedAt.toISOString(),
+      expiresAt: session.expiresAt.toISOString(),
+      ipAddress: session.ipAddress,
+      userAgent: session.userAgent,
+    })),
     player:
       player === undefined
         ? null

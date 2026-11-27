@@ -4,6 +4,9 @@ import {
   playerProfileInputSchema,
   isSupportedImage,
   MAX_AVATAR_BYTES,
+  beginAvatarUpload,
+  deleteAvatar,
+  finishAvatarUpload,
   saveAvatar,
   updatePlayerAvatar,
   updatePlayerProfile,
@@ -37,6 +40,12 @@ async function readBoundedBody(request: Request, maxBytes: number): Promise<Uint
     offset += chunk.byteLength;
   }
   return body;
+}
+
+async function holdAvatarUploadReservationForE2E(): Promise<void> {
+  if (process.env.NODE_ENV !== "development" || process.env.PLAYWRIGHT_TEST !== "true") return;
+  console.info("[E2E avatar] reservation acquired");
+  await new Promise<void>((resolve) => setTimeout(resolve, 1_200));
 }
 
 export async function GET(request: Request): Promise<Response> {
@@ -83,15 +92,29 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
+  if (!(await beginAvatarUpload(session.user.id))) {
+    return Response.json(
+      { message: "La cuenta no está activa o ya hay una subida de foto en curso." },
+      { status: 409 },
+    );
+  }
+
   try {
+    await holdAvatarUploadReservationForE2E();
     const avatarUrl = await saveAvatar(session.user.id, bytes);
     await updatePlayerAvatar(session.user.id, avatarUrl);
     return Response.json({ avatarUrl });
   } catch (error: unknown) {
     if (error instanceof AppError && error.code === "CONFLICT") {
+      await deleteAvatar(session.user.id);
       return Response.json({ message: error.message }, { status: 409 });
     }
+    if (error instanceof AppError && error.code === "VALIDATION") {
+      return Response.json({ message: error.message }, { status: 400 });
+    }
     throw error;
+  } finally {
+    await finishAvatarUpload(session.user.id);
   }
 }
 

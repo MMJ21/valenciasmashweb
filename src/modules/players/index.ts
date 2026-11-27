@@ -1,6 +1,11 @@
 export { listPlayersForDevelopment } from "./application/list-players";
 export { exportAccountData } from "./application/export-account-data";
 export type { AccountDataExport } from "./application/export-account-data";
+export {
+  beginAvatarUpload,
+  finishAvatarUpload,
+  waitForAvatarUpload,
+} from "./application/avatar-upload";
 export { CHARACTERS } from "./domain/characters";
 export type { Character } from "./domain/characters";
 export {

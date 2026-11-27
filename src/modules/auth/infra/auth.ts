@@ -5,7 +5,7 @@ import { username } from "better-auth/plugins";
 import { eq, inArray, sql } from "drizzle-orm";
 import { env } from "@/lib/config/env";
 import * as authSchema from "@/lib/db/auth-schema";
-import { ensurePlayerForUser } from "@/modules/players";
+import { ensurePlayerForUser, waitForAvatarUpload } from "@/modules/players";
 import { createPlayersDatabase } from "@/modules/players/infra/database";
 import * as playerSchema from "@/modules/players/infra/schema";
 import { resolveInitialRole } from "../domain/roles";
@@ -36,7 +36,6 @@ const anonymizedPlayerFields = {
 };
 
 async function prepareAccountDeletion(userId: string): Promise<void> {
-  await deleteAvatar(userId);
   const database = await createPlayersDatabase();
   const lockUser = database.execute(sql`
     SELECT 1 / COUNT(*)
@@ -51,6 +50,31 @@ async function prepareAccountDeletion(userId: string): Promise<void> {
     .update(authSchema.user)
     .set({ deletedAt: sql`COALESCE(${authSchema.user.deletedAt}, now())` })
     .where(eq(authSchema.user.id, userId));
+
+  if ("batch" in database) {
+    await database.batch([lockUser, markDeleted]);
+  } else {
+    await database.transaction(async (transaction) => {
+      const [existingUser] = await transaction
+        .select({ id: authSchema.user.id })
+        .from(authSchema.user)
+        .where(eq(authSchema.user.id, userId))
+        .for("update")
+        .limit(1);
+      if (existingUser === undefined) {
+        throw new APIError("NOT_FOUND", { message: "No se encontró la cuenta." });
+      }
+
+      await transaction
+        .update(authSchema.user)
+        .set({ deletedAt: sql`COALESCE(${authSchema.user.deletedAt}, now())` })
+        .where(eq(authSchema.user.id, userId));
+    });
+  }
+
+  await waitForAvatarUpload(userId);
+  await deleteAvatar(userId);
+
   const anonymizePlayer = database
     .update(playerSchema.players)
     .set(anonymizedPlayerFields)
@@ -68,25 +92,11 @@ async function prepareAccountDeletion(userId: string): Promise<void> {
     );
 
   if ("batch" in database) {
-    await database.batch([lockUser, markDeleted, anonymizePlayer, deletePlayerCharacters]);
+    await database.batch([anonymizePlayer, deletePlayerCharacters]);
     return;
   }
 
   await database.transaction(async (transaction) => {
-    const [existingUser] = await transaction
-      .select({ id: authSchema.user.id })
-      .from(authSchema.user)
-      .where(eq(authSchema.user.id, userId))
-      .for("update")
-      .limit(1);
-    if (existingUser === undefined) {
-      throw new APIError("NOT_FOUND", { message: "No se encontró la cuenta." });
-    }
-
-    await transaction
-      .update(authSchema.user)
-      .set({ deletedAt: sql`COALESCE(${authSchema.user.deletedAt}, now())` })
-      .where(eq(authSchema.user.id, userId));
     await transaction
       .update(playerSchema.players)
       .set(anonymizedPlayerFields)

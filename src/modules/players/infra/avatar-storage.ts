@@ -1,4 +1,5 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { AppError } from "@/lib/errors";
 
 interface AvatarObject {
   readonly body: ReadableStream<Uint8Array>;
@@ -26,6 +27,9 @@ declare global {
 
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 const AVATAR_KEY_PREFIX = "avatars/";
+const IMAGES_INVALID_INPUT_CODE = 9412;
+const LOCAL_IMAGES_INVALID_INPUT_CODE = 9523;
+const LOCAL_IMAGES_CORRUPT_IMAGE_MESSAGE = "Input buffer has corrupt header";
 
 function avatarKey(userId: string): string {
   return `${AVATAR_KEY_PREFIX}${userId}.webp`;
@@ -37,11 +41,23 @@ export async function saveAvatar(userId: string, source: Uint8Array): Promise<st
   }
 
   const { env } = await getCloudflareContext({ async: true });
-  const transformed = await env.IMAGES.input(source)
-    .transform({ width: 512, height: 512, fit: "cover" })
-    .output({ format: "image/webp", anim: false });
+  let transformed: Awaited<ReturnType<ReturnType<typeof env.IMAGES.input>["output"]>>;
+  try {
+    transformed = await env.IMAGES.input(source)
+      .transform({ width: 512, height: 512, fit: "cover" })
+      .output({ format: "image/webp", anim: false });
+  } catch (error: unknown) {
+    if (isInvalidImageInputError(error)) {
+      throw new AppError("El archivo no contiene una imagen válida.", "VALIDATION");
+    }
+    throw error;
+  }
   const response = await transformed.response();
   if (!response.ok) {
+    if (response.status === 415) {
+      await response.body?.cancel();
+      throw new AppError("El archivo no contiene una imagen compatible.", "VALIDATION");
+    }
     throw new Error("No se pudo procesar la imagen.");
   }
 
@@ -49,6 +65,17 @@ export async function saveAvatar(userId: string, source: Uint8Array): Promise<st
     httpMetadata: { contentType: "image/webp", cacheControl: "public, max-age=3600" },
   });
   return `/api/players/${encodeURIComponent(userId)}/avatar?v=${crypto.randomUUID()}`;
+}
+
+export function isInvalidImageInputError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null || !("code" in error)) return false;
+  if (error.code === IMAGES_INVALID_INPUT_CODE) return true;
+  return (
+    error.code === LOCAL_IMAGES_INVALID_INPUT_CODE &&
+    "message" in error &&
+    typeof error.message === "string" &&
+    error.message.includes(LOCAL_IMAGES_CORRUPT_IMAGE_MESSAGE)
+  );
 }
 
 export async function getAvatar(userId: string): Promise<AvatarObject | null> {

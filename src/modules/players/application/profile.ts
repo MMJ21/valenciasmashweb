@@ -3,7 +3,7 @@ import { AppError } from "@/lib/errors";
 import * as authSchema from "@/lib/db/auth-schema";
 import type { PlayerProfileInput } from "../domain/profile-input";
 import { createPlayersDatabase } from "../infra/database";
-import { isPostgresDivisionByZero } from "../infra/postgres-errors";
+import { isPostgresDivisionByZero, isPostgresForeignKeyViolation } from "../infra/postgres-errors";
 import * as schema from "../infra/schema";
 
 type PlayerDatabase = Awaited<ReturnType<typeof createPlayersDatabase>>;
@@ -29,6 +29,26 @@ export interface PlayerProfile {
 async function ensurePlayerExists(database: PlayerDatabase, userId: string): Promise<void> {
   // The Better Auth post-create hook can fail after the account is committed; repair on next use.
   await database.insert(schema.players).values({ userId }).onConflictDoNothing();
+}
+
+async function ensurePlayerExistsForProfileUpdate(
+  database: PlayerDatabase,
+  userId: string,
+): Promise<void> {
+  try {
+    await ensurePlayerExists(database, userId);
+  } catch (error: unknown) {
+    if (!isPostgresForeignKeyViolation(error, "players_user_id_user_id_fk")) {
+      throw error;
+    }
+    if (await isAccountDeletionPending(userId)) {
+      throw new AppError(
+        "La cuenta ya no está activa o se encuentra en proceso de eliminación.",
+        "CONFLICT",
+      );
+    }
+    throw error;
+  }
 }
 
 export async function ensurePlayerForUser(userId: string): Promise<void> {
@@ -137,7 +157,7 @@ export interface UpdatePlayerProfileInput extends PlayerProfileInput {
 
 export async function updatePlayerProfile(input: UpdatePlayerProfileInput): Promise<void> {
   const database = await createPlayersDatabase();
-  await ensurePlayerExists(database, input.userId);
+  await ensurePlayerExistsForProfileUpdate(database, input.userId);
   const [player] = await database
     .select({ id: schema.players.id })
     .from(schema.players)
@@ -254,18 +274,22 @@ export async function updatePlayerAvatar(userId: string, avatarUrl: string): Pro
     await runNeonProfileBatch(userId, () =>
       database.batch([
         database.execute(sql`
-          SELECT 1 / COUNT(*) FROM ${authSchema.user}
-          WHERE ${authSchema.user.id} = ${userId} AND ${authSchema.user.deletedAt} IS NULL
+          SELECT 1 / COUNT(*)
+          FROM (
+            SELECT ${authSchema.user.id}
+            FROM ${authSchema.user}
+            WHERE ${authSchema.user.id} = ${userId}
+              AND ${authSchema.user.deletedAt} IS NULL
+            FOR UPDATE
+          ) AS active_user
         `),
-        database
-          .update(schema.players)
-          .set({ avatarUrl })
-          .where(
-            and(
-              eq(schema.players.userId, userId),
-              sql`EXISTS (SELECT 1 FROM ${authSchema.user} WHERE ${authSchema.user.id} = ${userId} AND ${authSchema.user.deletedAt} IS NULL)`,
-            ),
-          ),
+        database.update(schema.players).set({ avatarUrl }).where(eq(schema.players.userId, userId)),
+        database.execute(sql`
+          SELECT 1 / COUNT(*)
+          FROM ${schema.players}
+          WHERE ${schema.players.userId} = ${userId}
+            AND ${schema.players.avatarUrl} = ${avatarUrl}
+        `),
       ]),
     );
     return;

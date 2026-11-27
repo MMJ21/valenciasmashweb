@@ -55,3 +55,10 @@ export const playerCharacters = pgTable(
   },
   (table) => [primaryKey({ columns: [table.playerId, table.characterId] })],
 );
+
+export const avatarUploads = pgTable("avatar_uploads", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
