@@ -18,17 +18,11 @@ async function findVerificationUrl(email: string): Promise<string | null> {
   }
 }
 
-async function countAvatarUploadReservations(): Promise<number> {
+async function readPlaywrightServerLog(): Promise<string> {
   try {
-    const content = await readFile(
-      resolve(process.cwd(), ".data", "playwright-server.log"),
-      "utf8",
-    );
-    return content
-      .split(/\r?\n/)
-      .filter((line) => line.includes("[E2E avatar] reservation acquired")).length;
+    return await readFile(resolve(process.cwd(), ".data", "playwright-server.log"), "utf8");
   } catch {
-    return 0;
+    return "";
   }
 }
 
@@ -220,7 +214,11 @@ test("REQ-200, REQ-201, REQ-205: registro, verificación, edición y baja", asyn
   await page.goto("/account");
   await page.getByLabel("Confirma tu contraseña para eliminar la cuenta").fill(password);
   page.once("dialog", (dialog) => dialog.accept());
-  const previousReservationCount = await countAvatarUploadReservations();
+  const serverLogBeforeRace = await readPlaywrightServerLog();
+  const armBarrierResponse = await page.request.post("/api/dev/e2e/avatar-barrier", {
+    data: { action: "arm" },
+  });
+  expect(armBarrierResponse.status()).toBe(204);
   const inFlightAvatarResponse = page.waitForResponse(
     (response) =>
       response.url().endsWith("/api/players/me") && response.request().method() === "POST",
@@ -230,22 +228,52 @@ test("REQ-200, REQ-201, REQ-205: registro, verificación, edición y baja", asyn
     mimeType: "image/png",
     buffer: await readFile(resolve(process.cwd(), "public/characters/mario.png")),
   });
-  const avatarUploadCompletion = inFlightAvatarResponse.then((response) => ({
-    response,
-    completedAt: Date.now(),
-  }));
-  await expect.poll(countAvatarUploadReservations).toBeGreaterThan(previousReservationCount);
+  const avatarUploadCompletion = inFlightAvatarResponse;
+  let inFlightUserId: string | null = null;
+  await expect
+    .poll(async () => {
+      const currentLog = await readPlaywrightServerLog();
+      const newLines = currentLog.slice(serverLogBeforeRace.length).split(/\r?\n/);
+      const writerLine = newLines.find((line) => line.includes("[E2E avatar] writer ready "));
+      inFlightUserId = writerLine?.split("[E2E avatar] writer ready ")[1] ?? null;
+      return inFlightUserId;
+    })
+    .not.toBeNull();
+  if (inFlightUserId === null) {
+    throw new Error("La subida E2E no alcanzó la barrera del servidor.");
+  }
   const deleteResponsePromise = page.waitForResponse(
     (response) =>
       response.url().endsWith("/api/auth/delete-user") && response.request().method() === "POST",
   );
   await page.getByRole("button", { name: "Eliminar mi cuenta" }).click();
+  await expect
+    .poll(async () =>
+      (await readPlaywrightServerLog()).includes(
+        `[E2E avatar] account deletion marked ${inFlightUserId}`,
+      ),
+    )
+    .toBe(true);
+  const releaseBarrierResponse = await page.request.post("/api/dev/e2e/avatar-barrier", {
+    data: { action: "release", userId: inFlightUserId },
+  });
+  expect(releaseBarrierResponse.status()).toBe(204);
   const deleteResponse = await deleteResponsePromise;
-  const deletionCompletedAt = Date.now();
   expect(deleteResponse.ok()).toBe(true);
-  const avatarUpload = await avatarUploadCompletion;
-  expect(avatarUpload.response.status()).toBe(409);
-  expect(avatarUpload.completedAt).toBeLessThan(deletionCompletedAt);
+  const avatarUploadResponse = await avatarUploadCompletion;
+  expect(avatarUploadResponse.status()).toBe(409);
+  await expect
+    .poll(async () => {
+      const currentLog = await readPlaywrightServerLog();
+      const reservationReleasedAt = currentLog.indexOf(
+        `[E2E avatar] reservation released ${inFlightUserId}`,
+      );
+      const deletionCompletedAt = currentLog.indexOf(
+        `[E2E avatar] account deletion completed ${inFlightUserId}`,
+      );
+      return reservationReleasedAt >= 0 && deletionCompletedAt > reservationReleasedAt;
+    })
+    .toBe(true);
   await expect(page).toHaveURL("http://localhost:3100/");
 
   const publicProfileResponse = await page.goto(`/players/${username}`);

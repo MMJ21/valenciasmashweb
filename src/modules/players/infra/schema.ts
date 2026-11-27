@@ -60,5 +60,8 @@ export const avatarUploads = pgTable("avatar_uploads", {
   userId: uuid("user_id")
     .primaryKey()
     .references(() => user.id, { onDelete: "cascade" }),
+  leaseId: uuid("lease_id").defaultRandom().notNull(),
+  state: varchar("state", { length: 16 }).notNull().default("writing"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

@@ -13,6 +13,10 @@ import { TERMS_VERSION } from "../domain/legal-versions";
 import { sendTransactionalEmail } from "./email-sender";
 import { hashPassword, verifyPasswordHash } from "./password-hasher";
 import { deleteAvatar } from "@/modules/players/infra/avatar-storage";
+import {
+  notifyE2EAccountDeletionCompleted,
+  notifyE2EAccountDeletionStarted,
+} from "@/lib/e2e/avatar-upload-barrier";
 
 const schema = { ...authSchema, ...playerSchema };
 const localSecret = "valenciasmash-local-auth-secret-only-not-for-production";
@@ -72,6 +76,7 @@ async function prepareAccountDeletion(userId: string): Promise<void> {
     });
   }
 
+  notifyE2EAccountDeletionStarted(userId);
   await waitForAvatarUpload(userId);
   await deleteAvatar(userId);
 
@@ -93,6 +98,7 @@ async function prepareAccountDeletion(userId: string): Promise<void> {
 
   if ("batch" in database) {
     await database.batch([anonymizePlayer, deletePlayerCharacters]);
+    notifyE2EAccountDeletionCompleted(userId);
     return;
   }
 
@@ -113,6 +119,7 @@ async function prepareAccountDeletion(userId: string): Promise<void> {
         ),
       );
   });
+  notifyE2EAccountDeletionCompleted(userId);
 }
 
 function createAuth() {

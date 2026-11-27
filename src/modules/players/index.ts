@@ -4,6 +4,7 @@ export type { AccountDataExport } from "./application/export-account-data";
 export {
   beginAvatarUpload,
   finishAvatarUpload,
+  startAvatarUploadWrite,
   waitForAvatarUpload,
 } from "./application/avatar-upload";
 export { CHARACTERS } from "./domain/characters";
@@ -25,4 +26,5 @@ export {
   isSupportedImage,
   MAX_AVATAR_BYTES,
   saveAvatar,
+  transformAvatar,
 } from "./infra/avatar-storage";

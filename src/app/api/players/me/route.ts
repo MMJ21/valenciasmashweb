@@ -8,11 +8,14 @@ import {
   deleteAvatar,
   finishAvatarUpload,
   saveAvatar,
+  startAvatarUploadWrite,
+  transformAvatar,
   updatePlayerAvatar,
   updatePlayerProfile,
 } from "@/modules/players";
 import { getAuth } from "@/modules/auth";
 import { AppError } from "@/lib/errors";
+import { waitForE2EAvatarWrite } from "@/lib/e2e/avatar-upload-barrier";
 
 async function readBoundedBody(request: Request, maxBytes: number): Promise<Uint8Array | null> {
   if (request.body === null) return new Uint8Array();
@@ -40,12 +43,6 @@ async function readBoundedBody(request: Request, maxBytes: number): Promise<Uint
     offset += chunk.byteLength;
   }
   return body;
-}
-
-async function holdAvatarUploadReservationForE2E(): Promise<void> {
-  if (process.env.NODE_ENV !== "development" || process.env.PLAYWRIGHT_TEST !== "true") return;
-  console.info("[E2E avatar] reservation acquired");
-  await new Promise<void>((resolve) => setTimeout(resolve, 1_200));
 }
 
 export async function GET(request: Request): Promise<Response> {
@@ -92,21 +89,28 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  if (!(await beginAvatarUpload(session.user.id))) {
+  const leaseId = await beginAvatarUpload(session.user.id);
+  if (leaseId === null) {
     return Response.json(
       { message: "La cuenta no está activa o ya hay una subida de foto en curso." },
       { status: 409 },
     );
   }
 
+  let avatarStored = false;
   try {
-    await holdAvatarUploadReservationForE2E();
-    const avatarUrl = await saveAvatar(session.user.id, bytes);
+    await waitForE2EAvatarWrite(session.user.id);
+    const transformedImage = await transformAvatar(bytes);
+    await startAvatarUploadWrite(session.user.id, leaseId);
+    const avatarUrl = await saveAvatar(session.user.id, transformedImage);
+    avatarStored = true;
     await updatePlayerAvatar(session.user.id, avatarUrl);
     return Response.json({ avatarUrl });
   } catch (error: unknown) {
     if (error instanceof AppError && error.code === "CONFLICT") {
-      await deleteAvatar(session.user.id);
+      if (avatarStored) {
+        await deleteAvatar(session.user.id);
+      }
       return Response.json({ message: error.message }, { status: 409 });
     }
     if (error instanceof AppError && error.code === "VALIDATION") {
@@ -114,7 +118,7 @@ export async function POST(request: Request): Promise<Response> {
     }
     throw error;
   } finally {
-    await finishAvatarUpload(session.user.id);
+    await finishAvatarUpload(session.user.id, leaseId);
   }
 }
 

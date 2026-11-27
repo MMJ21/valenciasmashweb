@@ -35,7 +35,7 @@ function avatarKey(userId: string): string {
   return `${AVATAR_KEY_PREFIX}${userId}.webp`;
 }
 
-export async function saveAvatar(userId: string, source: Uint8Array): Promise<string> {
+export async function transformAvatar(source: Uint8Array): Promise<ArrayBuffer> {
   if (source.byteLength === 0 || source.byteLength > MAX_AVATAR_BYTES) {
     throw new Error("El archivo debe ocupar como máximo 2 MB.");
   }
@@ -61,7 +61,15 @@ export async function saveAvatar(userId: string, source: Uint8Array): Promise<st
     throw new Error("No se pudo procesar la imagen.");
   }
 
-  await env.AVATARS.put(avatarKey(userId), await response.arrayBuffer(), {
+  return response.arrayBuffer();
+}
+
+export async function saveAvatar(
+  userId: string,
+  transformedImage: ArrayBuffer,
+): Promise<string> {
+  const { env } = await getCloudflareContext({ async: true });
+  await env.AVATARS.put(avatarKey(userId), transformedImage, {
     httpMetadata: { contentType: "image/webp", cacheControl: "public, max-age=3600" },
   });
   return `/api/players/${encodeURIComponent(userId)}/avatar?v=${crypto.randomUUID()}`;
