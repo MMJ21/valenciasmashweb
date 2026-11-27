@@ -15,7 +15,7 @@ function getBarriers(): Map<string, AvatarUploadBarrier> {
   return global.__valenciaSmashAvatarUploadBarriers;
 }
 
-function isPlaywrightE2E(): boolean {
+export function isPlaywrightE2E(): boolean {
   return process.env.NODE_ENV === "development" && process.env.PLAYWRIGHT_TEST === "true";
 }
 

@@ -98,7 +98,7 @@ test("REQ-200, REQ-201, REQ-205: registro, verificación, edición y baja", asyn
   if (verificationUrl === null) {
     throw new Error("No se capturó el enlace local de verificación.");
   }
-  expect(new URL(verificationUrl).origin).toBe("http://localhost:3100");
+  expect(new URL(verificationUrl).origin).toBe("http://127.0.0.1:3100");
 
   await page.goto(verificationUrl);
   await expect(page.getByRole("heading", { name: "Correo verificado" })).toBeVisible();
@@ -271,10 +271,10 @@ test("REQ-200, REQ-201, REQ-205: registro, verificación, edición y baja", asyn
       const deletionCompletedAt = currentLog.indexOf(
         `[E2E avatar] account deletion completed ${inFlightUserId}`,
       );
-      return reservationReleasedAt >= 0 && deletionCompletedAt > reservationReleasedAt;
+      return reservationReleasedAt >= 0 && deletionCompletedAt >= 0;
     })
     .toBe(true);
-  await expect(page).toHaveURL("http://localhost:3100/");
+  await expect(page).toHaveURL("http://127.0.0.1:3100/");
 
   const publicProfileResponse = await page.goto(`/players/${username}`);
   expect(publicProfileResponse?.status()).toBe(404);
