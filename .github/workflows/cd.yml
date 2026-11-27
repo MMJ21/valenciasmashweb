@@ -1,0 +1,80 @@
+name: CD
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.22.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Confirm master SHA before migrations
+        id: migration_guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          master_sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/master" --jq .sha)"
+          if [[ "$master_sha" != "$GITHUB_SHA" ]]; then
+            echo "is_current=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping deployment because master advanced beyond $GITHUB_SHA."
+            exit 0
+          fi
+          echo "is_current=true" >> "$GITHUB_OUTPUT"
+
+      - name: Apply database migrations
+        if: steps.migration_guard.outputs.is_current == 'true'
+        run: pnpm db:migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Confirm master SHA before deployment
+        id: deploy_guard
+        if: steps.migration_guard.outputs.is_current == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          master_sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/master" --jq .sha)"
+          if [[ "$master_sha" != "$GITHUB_SHA" ]]; then
+            echo "is_current=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping deployment because master advanced beyond $GITHUB_SHA. Migrations may already have run."
+            exit 0
+          fi
+          echo "is_current=true" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy Cloudflare Worker
+        if: steps.deploy_guard.outputs.is_current == 'true'
+        run: pnpm run deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Check production health
+        if: steps.deploy_guard.outputs.is_current == 'true'
+        shell: bash
+        run: |
+          response="$(curl --fail --silent --show-error --retry 10 --retry-all-errors --retry-delay 5 --max-time 30 https://valenciasmash.com/api/health)"
+          echo "$response" | jq --exit-status '.status == "ok"'

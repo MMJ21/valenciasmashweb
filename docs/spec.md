@@ -1,6 +1,6 @@
 # ValenciaSmash: Especificación (Spec-Driven Development)
 
-Versión: 0.1 | Estado: borrador para implementación
+Versión: 0.2 | Estado: implementación parcial; requisitos revisados el 24 nov 2026
 
 ## 0. Convenciones
 - Palabras clave: **DEBE** (obligatorio), **DEBERÍA** (recomendado), **PUEDE** (opcional).
@@ -25,15 +25,19 @@ Web de la comunidad ValenciaSmash (Smash Ultimate, torneos en start.gg) con: lan
 | Hosting | Cloudflare Workers con OpenNext (`@opennextjs/cloudflare`) |
 | BD | Neon PostgreSQL, driver `@neondatabase/serverless` |
 | ORM / migraciones | Drizzle ORM + drizzle-kit |
-| Auth | Better Auth (o Auth.js) con Discord como login principal |
+| Auth | Better Auth con usuario, correo y contraseña; verificación por correo obligatoria |
+| Correo transaccional | Resend API, con adaptador de consola en desarrollo |
 | Imágenes | Cloudflare R2 |
 | Validación | Zod en todas las entradas del servidor |
 | Tests | Vitest (unitarios), Playwright (E2E) |
-| CI | GitHub Actions: lint, typecheck, tests |
+| CI | GitHub Actions: lint, typecheck, unit tests, Playwright E2E con Chromium y build; automático en PR y `master`, también manual (`workflow_dispatch`) |
+| CD | GitHub Actions: en `push` a `master` valida SHA actual, aplica migraciones Neon, despliega Cloudflare y comprueba `/api/health`; requiere aprobación del entorno `production` (ADR-0017, ADR-0019) |
+
+El contexto, las alternativas y las consecuencias de estas decisiones se recogen en [`docs/adr/`](adr/README.md).
 
 Restricciones:
 - **NFR-001** Coste de infraestructura DEBE ser 0 €/mes (salvo dominio).
-- **NFR-002** Los secretos (token start.gg, client secret OAuth, credenciales) DEBEN estar solo en el servidor.
+- **NFR-002** Los secretos (token start.gg, Better Auth, Resend y credenciales) DEBEN estar solo en el servidor.
 - **NFR-003** Las rutas públicas DEBERÍAN cachearse (ISR/`revalidate`) por el límite de CPU del plan gratuito.
 - **NFR-004** Ninguna petición DEBE depender de más de ~10 ms de CPU. El trabajo pesado va por lotes.
 - **NFR-005** UI en español, accesible (WCAG AA básico) y responsive.
@@ -48,15 +52,20 @@ Restricciones:
 | `admin` | Lo de `importer` + gestionar roles, resolver disputas, verificar vínculos, moderar |
 
 - **REQ-001** Los permisos DEBEN comprobarse en el servidor en cada acción, nunca solo en la UI.
-- **REQ-002** El primer admin se define por variable de entorno (`ADMIN_DISCORD_IDS`).
+- **REQ-002** Las cuentas nuevas empiezan como `user`. El primer administrador se promueve manualmente mediante un script de operador, solo si su correo está verificado y la cuenta sigue activa.
 
 ## 5. Modelo de datos
 
 ```
-users            (id, discord_id UNIQUE, email, role, created_at, deleted_at)
+user             (id UUID, name, username UNIQUE, email UNIQUE, email_verified, role, adult_confirmed,
+                  terms_accepted, deleted_at, created_at, updated_at)
+session          (id UUID, user_id, token UNIQUE, expires_at, ip_address, user_agent)
+account          (id UUID, user_id, provider_id, account_id, password, timestamps)
+verification     (id UUID, identifier, value, expires_at, timestamps)
+rateLimit        (key PK, count, last_request)
 players          (id, user_id NULL UNIQUE, startgg_player_id UNIQUE NULL, startgg_slug,
-                  gamertag, display_name, avatar_url, bio, created_at)
-player_characters(player_id, character_id, is_main)          -- PK compuesta
+                  gamertag, first_name, last_name, twitter, twitch, avatar_url, bio, created_at)
+player_characters(player_id, character_id, is_main)          -- PK compuesta; máximo 2 en v1
 startgg_links    (id, user_id, startgg_user_id, status: pending|verified|rejected, verified_via: oauth|admin, created_at)
 tournaments      (id, startgg_id UNIQUE, name, slug, start_at, city, is_online,
                   state: upcoming|ongoing|completed, num_attendees, url, imported_at)
@@ -78,7 +87,8 @@ app_config       (key PK, value jsonb)
 - **REQ-010** Todo ID externo de start.gg DEBE tener restricción UNIQUE para permitir upsert idempotente.
 - **REQ-011** `season_key` tiene formato `YYYY-S1` o `YYYY-S2`.
 - **REQ-012** `players.user_id` es único: un usuario solo puede reclamar un jugador.
-- **REQ-013** Los personajes provienen de un catálogo estático versionado en el repositorio (Smash Ultimate, 89 luchadores o los que existan).
+- **REQ-013** Los personajes provienen de un catálogo estático versionado en el repositorio. La ficha v1 presenta 86 selecciones según la agrupación de la comunidad: Pokémon Trainer, Pyra & Mythra e Ice Climbers son una entrada cada uno; Samus y Zero Suit Samus y los tres Miis son entradas separadas. Se conserva un icono por entrada en el catálogo de perfiles.
+- En v1 se ofrece un icono por personaje usando el primer color disponible; el selector de variantes queda para una fase posterior.
 
 ## 6. Funcionalidades
 
@@ -86,19 +96,31 @@ app_config       (key PK, value jsonb)
 - **REQ-100** Muestra los próximos torneos (`state = upcoming`, fecha futura, Valencia o `is_online` según filtro) ordenados por fecha.
 - **REQ-101** Muestra los resultados del último torneo `completed`: nombre, fecha, top 8 de cada evento y enlace a start.gg.
 - **REQ-102** Muestra un resumen del top 5 del leaderboard del semestre en curso.
+- **REQ-103** La landing usa la identidad visual de ValenciaSmash: tema oscuro con acentos ámbar y azul, logo proporcionado por la comunidad e interfaz responsive.
+- **REQ-104** El bloque del ranking actual muestra puesto, jugador, variación, e icono del personaje principal para los cinco primeros.
 - **AC-100** Dado un torneo futuro importado, aparece en la landing sin intervención adicional.
 - **AC-101** Sin torneos, se muestran estados vacíos legibles, sin errores.
 - **AC-102** La página se sirve cacheada y se revalida al importar o reimportar (`revalidateTag`).
 
 ### 6.2 Autenticación y ficha de jugador
-- **REQ-200** Login con Discord OAuth. Al primer login se crea `user` y un `player` vacío.
-- **REQ-201** El usuario DEBE poder editar: nombre visible, foto, personajes (máx. 3 [CFG], uno marcado principal) y bio (máx. 500 caracteres).
-- **REQ-202** La bio DEBE sanearse (texto plano o Markdown limitado, sin HTML).
-- **REQ-203** Foto: JPEG/PNG/WebP, máx. 2 MB [CFG], redimensionada y recodificada en servidor a WebP 512×512, subida a R2 con subida directa firmada o por el servidor.
-- **REQ-204** La ficha pública `/players/[slug]` muestra: datos, personajes, ranking actual, historial de torneos, estadísticas de point matches y títulos.
-- **REQ-205** El usuario DEBE poder eliminar su cuenta. Se anonimiza el `player` (se conserva el historial de torneos).
+- **REQ-200** Registro e inicio de sesión con username y contraseña (mín. 12, máx. 128 caracteres). El registro requiere un email único, confirmación de mayoría de edad y aceptación de términos; la sesión no se habilita hasta verificar el email. Al crear la cuenta se crea un `player` vacío.
+- **REQ-201** El usuario DEBE poder editar: Nick (almacenado como `gamertag`), nombre, apellidos, Twitter, Twitch, foto, personaje principal y personaje secundario opcional, y bio (máx. 500 caracteres). El principal y el secundario se eligen en desplegables con icono y nombre; el secundario no puede duplicar al principal.
+- **REQ-202** La biografía DEBE tratarse como texto plano, sin interpretar HTML ni Markdown en v1.
+- **REQ-203** Foto: JPEG/PNG/WebP, máx. 2 MiB [CFG]; el servidor valida la firma del formato, recodifica con Cloudflare Images a WebP 512×512 (recorte `cover`) y guarda el resultado en un bucket privado R2. La subida pasa por el endpoint autenticado; no se conserva el original. La URL pública se sirve mediante el Worker.
+- **REQ-204** La ficha pública `/players/[username]` muestra: Nick, nombre y apellidos, redes sociales, personajes, ranking actual, historial de torneos, estadísticas de point matches y títulos.
+- **REQ-205** El usuario DEBE poder eliminar su cuenta. La cuenta se desactiva inmediatamente; el sistema espera a que termine cualquier subida de foto en curso y borra el objeto de R2 antes de anonimizar el `player`. Después elimina credenciales, sesión, vínculos y personajes elegidos; se conserva el historial competitivo asociado de forma anónima.
+- **REQ-206** El sistema DEBE enviar enlaces de verificación y recuperación de contraseña por correo. En producción usa Resend; en desarrollo local los enlaces se muestran en la consola.
+- **REQ-207** Un usuario activo y autenticado DEBE poder descargar en JSON los datos personales que el servicio mantiene asociados a su cuenta (cuenta, metadatos de sus sesiones, ficha, personajes y vínculos implementados). El export no DEBE incluir contraseñas, hashes, tokens de sesión ni datos privados de otras personas; al añadir nuevas fuentes de datos personales se DEBE ampliar el export.
+- **REQ-208** El servicio DEBE publicar términos, aviso legal, política de privacidad y política de cookies accesibles desde el registro y el pie de página. Titular, contacto, finalidades, bases jurídicas, proveedores, transferencias, cookies y plazos DEBEN reflejar el servicio real y revisarse por una persona antes de abrir el registro al público.
 - **AC-200** Un usuario sin sesión no puede editar ninguna ficha (403).
 - **AC-201** Un archivo que no sea imagen o supere el límite se rechaza con mensaje claro.
+- **AC-202** Una foto válida se sirve como WebP de 512×512; al reemplazarla, el perfil muestra la nueva URL versionada y no se expone el objeto original.
+- **AC-203** La baja elimina la foto de R2 antes de anonimizar el perfil; si falla el borrado, la baja no se completa.
+- **AC-204** El contenido de la biografía se representa como texto: etiquetas como `<script>` y `<b>` no crean elementos HTML.
+- **AC-205** La exportación autenticada devuelve un JSON adjunto con `Cache-Control: no-store`; sin sesión responde 401 y el JSON no contiene credenciales ni secretos de sesión.
+- **AC-206** La exportación incluye la fecha y versión de aceptación de términos disponibles. Las cuentas antiguas sin registro histórico las muestran como `null`; no se inventa una fecha retroactiva.
+- **AC-207** Los términos, aviso legal, privacidad y cookies están enlazados desde el pie de página y el registro; los borradores identifican los datos que aún requieren completar o revisar.
+- **AC-208** Si hay una subida de avatar en curso cuando se solicita la baja, esta espera su finalización y borra el objeto resultante antes de completar la anonimización. Si la subida detecta que la cuenta pasó a baja, devuelve 409 y limpia el objeto antes de liberar su reserva.
 
 ### 6.3 Vinculación con start.gg
 - **REQ-210** Método principal: OAuth2 de start.gg (scope `user.identity`). Tras el callback se consulta `currentUser { id slug player { id gamerTag } }`.
@@ -233,12 +255,14 @@ proposed -> accepted -> reported -> confirmed
 - **SEC-002** Limitación de tasa en endpoints de escritura (p. ej. Cloudflare rate limiting o tabla de contadores).
 - **SEC-003** Protección CSRF y cookies `HttpOnly`, `Secure`, `SameSite=Lax`.
 - **SEC-004** Cabeceras de seguridad (CSP, X-Content-Type-Options, etc.).
-- **SEC-005** Aviso legal visible en las páginas de PM: puntos sin valor y sin intermediación. Aceptación de ser mayor de edad y de los términos en el registro.
+- **SEC-005** Aviso legal visible en las páginas de PM: puntos sin valor y sin intermediación. El registro exige confirmar mayoría de edad y aceptar los términos; el texto legal actual es un borrador que requiere revisión antes de abrir el servicio al público.
 - **SEC-006** Registro de auditoría de acciones de admin (roles, disputas, importaciones, verificaciones).
 - **SEC-007** Detección de farmeo: informe admin de parejas con muchos PM entre sí.
 
 ## 8. Configuración (`app_config`, editable por admin)
 `pm.max_wager=1000`, `pm.mm_wager=100`, `pm.max_planned_per_day=5`, `pm.proposal_ttl_h=48`, `pm.report_ttl_d=7`, `pm.min_sets_duelist=5`, `pm.mm_queue_ttl_h=24`, `pm.mm_repeat_per_week=1`, `elo.initial=1000`, `elo.k=32`, `ranking.active_algorithm=elo`, `ranking.min_tournaments=1`.
+
+Configuración de autenticación/cuenta: todas las cuentas nuevas empiezan como `user`; un operador promueve manualmente al administrador inicial con `pnpm admin:promote <correo>`, que exige correo verificado y cuenta activa. La aceptación de términos registra versión y fecha UTC desde la migración `0002`; los registros anteriores quedan sin backfill histórico (`null`). El rate limit de Better Auth es persistente en BD en producción. La ficha admite dos personajes como máximo (principal y secundario opcional). Las contraseñas nuevas usan PBKDF2-HMAC-SHA-256 con 100 000 iteraciones, valor conservador mientras se valida el límite efectivo y la CPU del Worker desplegado (NFR-004, ADR-0012).
 
 ## 9. Estructura del proyecto
 ```
@@ -262,12 +286,24 @@ Cada tarea se cierra cuando sus AC pasan.
 | Fase | Tareas | Reqs |
 |---|---|---|
 | **0. Fundaciones** | T-0.1 Repo, TS estricto, lint, CI. T-0.2 Next.js + OpenNext en Cloudflare (hello world desplegado). T-0.3 Neon + Drizzle + migración inicial. T-0.4 `lib/season` con tests | NFR-001..004, REQ-011 |
-| **1. Auth y fichas** | T-1.1 Discord login y roles. T-1.2 Ficha editable. T-1.3 Foto a R2. T-1.4 Perfil público | REQ-001, 002, 200..205 |
+| **1. Auth y fichas** | T-1.1 Better Auth (username/correo/contraseña), verificación con Resend y roles. T-1.2 Ficha editable. T-1.3 Foto a R2. T-1.4 Perfil público | REQ-001, 002, 200..206 |
 | **2. start.gg** | **T-2.0 Spike OAuth/API real (scopes, campos)**. T-2.1 Cliente GraphQL con throttling. T-2.2 Previsualización. T-2.3 Importación por lotes e idempotente. T-2.4 Panel y auditoría. T-2.5 OAuth y vinculación (+ respaldo admin). T-2.6 Landing | REQ-100..102, 210..214, 300..310 |
 | **3. Ranking** | T-3.1 Interfaz y Elo con tests de vectores. T-3.2 Snapshots y recálculo. T-3.3 UI del leaderboard | REQ-400..406 |
 | **4. Point matches** | T-4.1 Máquina de estados y reglas puras. T-4.2 Planeados y límite diario. T-4.3 Reporte y confirmación. T-4.4 Disputas admin. T-4.5 Cola de matchmaking. T-4.6 Tres leaderboards y títulos | REQ-500..544 |
 | **5. Cierre** | T-5.1 Panel admin y configuración. T-5.2 RGPD y textos legales. T-5.3 SEO, Sentry, UptimeRobot. T-5.4 E2E de los flujos críticos | NFR-005, 006, SEC-* |
 | **6. PWA** | T-6.1 Manifest, iconos y aviso de instalación. T-6.2 Service worker y página offline. T-6.3 Web Push (VAPID, suscripciones, preferencias). T-6.4 Notificaciones en casos de uso de point matches. T-6.5 API `/api/v1` y OpenAPI | REQ-600..622, NFR-007 |
+
+### Estado de implementación (26 nov 2026)
+- **Fase 0:** Next.js, OpenNext, Neon/Drizzle, PGlite local, migraciones y `lib/season` implementados. Worker publicado en `https://valenciasmash.com`; healthcheck y landing responden correctamente. `workers.dev` y Preview URLs están desactivados. La migración `0001` se aplicó a Neon.
+- **Fase 1 implementada parcialmente:** landing con logo/paleta; Better Auth con username, contraseña, verificación y recuperación por email; adaptador Resend en producción y enlaces por consola en desarrollo; alta con rol `user` y promoción manual del admin inicial; aceptación de edad/términos; ficha editable y pública, redes sociales, borrado/anonimización y selector principal/secundario; catálogo estático de 86 entradas. La subida, recodificación con Images y almacenamiento en R2 de fotos se verificaron manualmente en producción; no hay una prueba E2E automatizada de esos bindings.
+- El catálogo muestra un icono del primer color disponible por personaje. Se mantienen los iconos de variantes originales en `public/Stock Icons/`; los 86 iconos de ficha están normalizados en `public/characters/`.
+- La migración `0003` elimina `players.display_name`; la ficha usa `first_name` y `last_name`.
+- La landing muestra un top 5 provisional mantenido en `modules/ranking/domain/current-ranking.ts` con los datos proporcionados por la comunidad (MVL/Diddy Kong, Nub/Joker, Samu/Roy, Sir William/Palutena y Raptor/Meta Knight, con sus variaciones). Aún no se calcula desde `ratings_snapshot`; eso corresponde a la Fase 3.
+- **Despliegue verificado:** registro, verificación por correo a otro destinatario, inicio de sesión, edición/guardado de ficha y baja de cuenta se probaron con Neon y Resend en el Worker real. PBKDF2 con 100 000 iteraciones funciona en el runtime desplegado; sigue pendiente medir el tiempo de CPU.
+- **Pendiente:** aplicar las migraciones `0002` y `0003` en Neon, datos reales de torneos, cálculo persistente del ranking, medir la CPU del Worker y revisión humana/legal de la política de privacidad y los términos. La exportación JSON está implementada; la política publicada es un borrador con campos pendientes. El remitente de Resend `send.valenciasmash.com` está verificado y probado; no abrir el registro al público hasta completar los datos del responsable y revisar los textos.
+- **Despliegue continuo:** el workflow CD de GitHub Actions compara el SHA con la punta de `master` antes de migrar y antes de desplegar; después de migrar, un SHA obsoleto omite el deploy. El workflow aplica migraciones Neon, despliega el Worker y comprueba el healthcheck tras aprobación del entorno protegido `production` (ADR-0017 y ADR-0019). Pendiente crear el entorno, configurar reviewers y secretos, y validar la primera ejecución.
+- **Verificación local:** 24 pruebas unitarias. Playwright con Chromium cubre landing, exportación y ciclo de cuenta sobre PGlite; también sube y reemplaza una imagen mediante el binding Images local, comprueba el WebP 512×512 servido por R2 y verifica el borrado del objeto al eliminar la cuenta. La carga en Cloudflare real se comprobó manualmente; no se crean cuentas E2E ni se ejecutan pruebas destructivas contra producción. `lint`, `typecheck`, `format:check`, `next build` y `test:e2e` comprobados.
+- **Despliegue de base de datos:** la migración inicial consolidada `0000` solo se debe aplicar a una base nueva. La migración incremental `0001` añadió `rateLimit.id` conservando los contadores; las futuras modificaciones deben preservar datos y vínculos existentes.
 
 ## 11. Definición de hecho (DoD)
 - Todos los AC de la tarea pasan en CI.
@@ -283,7 +319,9 @@ Cada tarea se cierra cuando sus AC pasan.
 4. **Algoritmo de ranking definitivo:** pendiente. La interfaz debe admitir placements y no solo sets.
 5. **Definición de "set" en leaderboards de PM:** ¿PM completo o partidas individuales? (REQ-544).
 6. **Moderación de contenido** (fotos y bios ofensivas): por ahora, reporte manual a admin.
-7. **Edad mínima y términos legales:** redacción revisada por la comunidad.
-8. **Service worker en OpenNext/Cloudflare:** validar compatibilidad (Serwist) en la fase 0 con un spike, antes de la fase 6.
-9. **Push en iOS:** requiere PWA instalada y iOS 16.4+. Adopción limitada, y las notificaciones in-app (campana) son el respaldo.
-10. **Límite de CPU del plan gratuito** al enviar push a muchos suscriptores: enviar en lotes pequeños con `waitUntil`.
+7. **Assets de Nintendo:** los iconos de personajes tienen permiso informal de su autor en Reddit, sin archivo de licencia; ese permiso no cubre los derechos sobre el arte original. Ver [ADR-0011](adr/0011-iconos-de-personajes-de-terceros.md). Mantener aviso de no afiliación y mecanismo de retirada.
+8. **Edad mínima y términos legales:** redacción revisada por la comunidad.
+9. **Service worker en OpenNext/Cloudflare:** validar compatibilidad (Serwist) en la fase 0 con un spike, antes de la fase 6.
+10. **Push en iOS:** requiere PWA instalada y iOS 16.4+. Adopción limitada, y las notificaciones in-app (campana) son el respaldo.
+11. **Límite de CPU del plan gratuito** al enviar push a muchos suscriptores: enviar en lotes pequeños con `waitUntil`.
+12. **PBKDF2 en Workers:** hay un reporte de producción que observa un máximo de 100 000 iteraciones con `compatibility_date` 2026-10-04, mientras `wrangler dev --local` con `compatibility_date` 2026-11-20 aceptó 100 001. Validar el límite del servicio gestionado y CPU antes de producción. Ver ADR-0012.
